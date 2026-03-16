@@ -1,0 +1,87 @@
+{
+  "env": {
+    "AZURE_OPENAI_API_KEY": "<your-azure-openai-api-key>",
+    "CI_API_KEY": "<your-collegeinsight-api-key>"
+  },
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "azure-gpt54": {
+        "baseUrl": "http://localhost:4200/openai",
+        "apiKey": "${AZURE_OPENAI_API_KEY}",
+        "api": "openai-responses",
+        "models": [
+          {
+            "id": "gpt-5.4-pro",
+            "name": "GPT-5.4 Pro (Azure)"
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "azure-gpt54/gpt-5.4-pro"
+      },
+      "compaction": {
+        "mode": "safeguard"
+      }
+    }
+  },
+  "channels": {
+    "whatsapp": {
+      "dmPolicy": "allowlist",
+      "allowFrom": [
+        "<+1STUDENTPHONE>"
+      ],
+      "groups": {
+        "*": {
+          "requireMention": true
+        }
+      }
+    },
+    "discord": {
+      "enabled": true,
+      "token": "<DISCORD_BOT_TOKEN>",
+      "allowFrom": [
+        "<STUDENT_DISCORD_USER_ID>"
+      ]
+    }
+  },
+  "skills": {
+    "entries": {
+      "college-insight": {
+        "env": {
+          "CI_API_KEY": "${CI_API_KEY}"
+        }
+      }
+    }
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto",
+    "restart": true
+  },
+  "tools": {
+    "deny": [
+      "exec",
+      "process"
+    ]
+  },
+  "gateway": {
+    "mode": "local",
+    "auth": {
+      "mode": "token",
+      "token": "<your-gateway-token>"
+    }
+  },
+  "cron": [
+    {
+      "id": "deadline-check",
+      "schedule": "0 8 * * *",
+      "agent": "main",
+      "message": "Check my upcoming college application deadlines. If any are within 14 days and have incomplete sections, alert me with details. Only report items that need action."
+    }
+  ]
+}
