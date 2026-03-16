@@ -311,7 +311,7 @@ function showPreviewOverlay(filled, flagged, portal, section) {
   setTimeout(() => host.remove(), 30000);
 }
 
-// Listen for fill requests from popup
+// Listen for fill requests from popup or CI web app
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "CI_FILL_SECTION") {
     fillCurrentSection().then(sendResponse);
@@ -320,5 +320,246 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return false;
 });
 
+// ════════════════════════════════════════════════════════════════
+// "Fill All Sections" — Sequential multi-section fill flow
+// Triggered from CI's Application Prep page via ci-bridge
+// ════════════════════════════════════════════════════════════════
+
+const COMMON_APP_SECTIONS = [
+  {
+    key: "profile",
+    label: "Personal Info",
+    urlPath: "/common/1/232",
+    twinEndpoint: "profile",
+  },
+  {
+    key: "education",
+    label: "Education",
+    urlPath: "/common/3/232",
+    twinEndpoint: "profile",
+  },
+  {
+    key: "testing",
+    label: "Testing",
+    urlPath: "/common/5/232",
+    twinEndpoint: "profile",
+  },
+  {
+    key: "activities",
+    label: "Activities",
+    urlPath: "/common/7/232",
+    twinEndpoint: "activities",
+  },
+  {
+    key: "essays",
+    label: "Writing",
+    urlPath: "/common/8/232",
+    twinEndpoint: "essays",
+  },
+];
+
+/**
+ * Fill all sections of a portal sequentially.
+ * Navigates to each section, fills, pauses for student visibility, then moves on.
+ */
+async function fillAllSections() {
+  const portal = window.__ciPortal;
+  if (!portal) return { success: false, reason: "not_on_portal" };
+
+  const sections = portal === "common_app" ? COMMON_APP_SECTIONS : [];
+  if (sections.length === 0) {
+    return { success: false, reason: "no_fill_all_config" };
+  }
+
+  const results = [];
+  showFillAllProgress(0, sections.length, "Starting...");
+
+  for (let i = 0; i < sections.length; i++) {
+    const sec = sections[i];
+    showFillAllProgress(i, sections.length, `Filling ${sec.label}...`);
+
+    // Navigate to section
+    const baseUrl = window.location.origin;
+    window.location.href = `${baseUrl}${sec.urlPath}`;
+
+    // Wait for page to load and fields to render
+    await waitForPageReady();
+
+    // Fill the current section
+    const result = await fillCurrentSection();
+    results.push({
+      section: sec.key,
+      label: sec.label,
+      ...result,
+    });
+
+    // Pause for student to see what was filled
+    await delay(2000);
+  }
+
+  // Show final summary
+  const totalFilled = results.reduce((s, r) => s + (r.filled || 0), 0);
+  const totalFlagged = results.reduce((s, r) => s + (r.flagged || 0), 0);
+  showFillAllSummary(results, totalFilled, totalFlagged);
+
+  // Report batch status
+  reportBatchStatus(portal, results);
+
+  // Notify CI web app that fill is complete
+  chrome.runtime.sendMessage({
+    type: "CI_FILL_ALL_COMPLETE",
+    results,
+    totalFilled,
+    totalFlagged,
+  });
+
+  return { success: true, results, totalFilled, totalFlagged };
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForPageReady() {
+  return new Promise((resolve) => {
+    let checks = 0;
+    const interval = setInterval(() => {
+      checks++;
+      // Check if form fields have rendered
+      const hasFields =
+        document.querySelectorAll(
+          'input[id^="text_ques_"], textarea[id^="text_ques_"], input[type="checkbox"][id*="checkboxList"]',
+        ).length > 0;
+      if (hasFields || checks > 20) {
+        clearInterval(interval);
+        resolve();
+      }
+    }, 500);
+  });
+}
+
+function showFillAllProgress(current, total, message) {
+  const existing = document.getElementById("ci-fill-all-progress");
+  if (existing) existing.remove();
+
+  const host = document.createElement("div");
+  host.id = "ci-fill-all-progress";
+  const shadow = host.attachShadow({ mode: "closed" });
+
+  const pct = total > 0 ? Math.round(((current + 1) / total) * 100) : 0;
+
+  shadow.innerHTML = `
+    <style>
+      .ci-progress {
+        position: fixed; top: 12px; right: 12px; z-index: 2147483647;
+        background: #fff; border: 2px solid #4f46e5; border-radius: 12px;
+        padding: 16px 20px; font-family: system-ui, sans-serif; font-size: 14px;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.15); width: 300px; color: #1e1e2e;
+      }
+      .ci-title { font-weight: 600; font-size: 15px; margin-bottom: 8px; }
+      .ci-bar-bg { background: #e2e8f0; border-radius: 4px; height: 8px; margin: 8px 0; }
+      .ci-bar { background: #4f46e5; border-radius: 4px; height: 8px; transition: width 0.3s; }
+      .ci-msg { color: #64748b; font-size: 13px; }
+      .ci-abort { margin-top: 8px; font-size: 12px; color: #ef4444; cursor: pointer; border: none; background: none; }
+    </style>
+    <div class="ci-progress">
+      <div class="ci-title">CollegeInsight — Filling Application</div>
+      <div class="ci-bar-bg"><div class="ci-bar" style="width: ${pct}%"></div></div>
+      <div class="ci-msg">${message} (${current + 1}/${total})</div>
+      <button class="ci-abort" id="ci-abort">Stop filling</button>
+    </div>
+  `;
+
+  shadow.getElementById("ci-abort")?.addEventListener("click", () => {
+    window.__ciFillAllAborted = true;
+    host.remove();
+  });
+
+  document.body.appendChild(host);
+}
+
+function showFillAllSummary(results, totalFilled, totalFlagged) {
+  const existing = document.getElementById("ci-fill-all-progress");
+  if (existing) existing.remove();
+
+  const host = document.createElement("div");
+  host.id = "ci-fill-all-progress";
+  const shadow = host.attachShadow({ mode: "closed" });
+
+  const timeSaved = Math.round((totalFilled * 30) / 60);
+  const sectionLines = results
+    .map((r) => {
+      const icon = r.filled > 0 ? "✓" : "—";
+      return `<div>${icon} ${r.label}: ${r.filled || 0} fields</div>`;
+    })
+    .join("");
+
+  shadow.innerHTML = `
+    <style>
+      .ci-summary {
+        position: fixed; top: 12px; right: 12px; z-index: 2147483647;
+        background: #fff; border: 2px solid #16a34a; border-radius: 12px;
+        padding: 16px 20px; font-family: system-ui, sans-serif; font-size: 14px;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.15); width: 320px; color: #1e1e2e;
+      }
+      .ci-title { font-weight: 600; font-size: 15px; color: #16a34a; margin-bottom: 8px; }
+      .ci-sections { font-size: 13px; line-height: 1.8; margin: 8px 0; }
+      .ci-total { font-weight: 600; margin-top: 8px; }
+      .ci-time { color: #64748b; font-size: 12px; }
+      .ci-close { cursor: pointer; font-size: 18px; background: none; border: none; color: #888; float: right; }
+    </style>
+    <div class="ci-summary">
+      <button class="ci-close" id="ci-close">&times;</button>
+      <div class="ci-title">Application Fill Complete!</div>
+      <div class="ci-sections">${sectionLines}</div>
+      <div class="ci-total">${totalFilled} fields filled, ${totalFlagged} need review</div>
+      <div class="ci-time">~${timeSaved} minutes saved</div>
+    </div>
+  `;
+
+  shadow
+    .getElementById("ci-close")
+    ?.addEventListener("click", () => host.remove());
+  document.body.appendChild(host);
+  setTimeout(() => host.remove(), 60000);
+}
+
+function reportBatchStatus(portal, results) {
+  const sections = results.map((r) => ({
+    section: r.section,
+    fieldsTotal: (r.filled || 0) + (r.flagged || 0),
+    fieldsFilled: r.filled || 0,
+    status:
+      r.flagged === 0 && r.filled > 0
+        ? "complete"
+        : r.filled > 0
+          ? "partial"
+          : "skipped",
+  }));
+
+  chrome.runtime.sendMessage({
+    type: "CI_POST_STATUS",
+    payload: {
+      portal,
+      sections,
+      totalFilled: results.reduce((s, r) => s + (r.filled || 0), 0),
+      totalFlagged: results.reduce((s, r) => s + (r.flagged || 0), 0),
+      agentType: "extension",
+      fillMode: "fill_all",
+      timestamp: new Date().toISOString(),
+    },
+  });
+}
+
+// Check if Fill All was requested (from CI web app via service worker)
+chrome.storage.local.get(["ciFillAll"], (data) => {
+  if (data.ciFillAll && !window.__ciFillAllStarted) {
+    window.__ciFillAllStarted = true;
+    chrome.storage.local.remove("ciFillAll");
+    fillAllSections();
+  }
+});
+
 // Expose for direct invocation
 window.__ciFill = fillCurrentSection;
+window.__ciFillAll = fillAllSections;

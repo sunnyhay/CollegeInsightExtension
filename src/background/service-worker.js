@@ -87,8 +87,75 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  // "Fill All" — open portal in new tab and start sequential fill
+  if (message.type === "CI_FILL_ALL") {
+    handleFillAll(message.portal, message.college);
+    return false;
+  }
+
+  // "Fill One Section" — open portal to specific section
+  if (message.type === "CI_FILL_SECTION_FROM_CI") {
+    handleFillSection(message.portal, message.section, message.college);
+    return false;
+  }
+
   return false;
 });
+
+// -- Fill All orchestration --
+
+const PORTAL_URLS = {
+  common_app: "https://apply.commonapp.org",
+  uc_app: "https://apply.universityofcalifornia.edu",
+};
+
+async function handleFillAll(portal, college) {
+  const baseUrl = PORTAL_URLS[portal];
+  if (!baseUrl) return;
+
+  const tab = await chrome.tabs.create({ url: `${baseUrl}/dashboard` });
+
+  // Store fill-all intent for the content script to pick up
+  await chrome.storage.local.set({
+    ciFillAll: {
+      portal,
+      college,
+      tabId: tab.id,
+      startedAt: Date.now(),
+    },
+  });
+}
+
+async function handleFillSection(portal, section, college) {
+  const baseUrl = PORTAL_URLS[portal];
+  if (!baseUrl) return;
+
+  // Fetch portal map to get section URL
+  try {
+    const map = await ciApiFetch(
+      `agent/portal-map?portal=${encodeURIComponent(portal)}`,
+    );
+    const sectionConfig = map.sections?.[section];
+    const sectionUrl = sectionConfig?.urlPattern
+      ? `${baseUrl}${sectionConfig.urlPattern}`
+      : `${baseUrl}/dashboard`;
+
+    const tab = await chrome.tabs.create({ url: sectionUrl });
+
+    await chrome.storage.local.set({
+      ciFillSection: {
+        portal,
+        section,
+        college,
+        tabId: tab.id,
+        startedAt: Date.now(),
+      },
+    });
+  } catch {
+    // Fallback: open dashboard
+    await chrome.tabs.create({ url: `${baseUrl}/dashboard` });
+  }
+}
 
 // -- Install/update lifecycle --
 
