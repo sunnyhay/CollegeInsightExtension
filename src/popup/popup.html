@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { width: 320px; padding: 16px; font-family: system-ui, -apple-system, sans-serif; color: #1e1e2e; }
+    .header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .header img { width: 24px; height: 24px; }
+    .header h1 { font-size: 15px; font-weight: 600; }
+    .status { padding: 10px; border-radius: 8px; margin-bottom: 12px; font-size: 13px; }
+    .status.connected { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+    .status.disconnected { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+    .portal-info { padding: 10px; background: #f8fafc; border-radius: 8px; margin-bottom: 12px; font-size: 13px; }
+    .portal-info .label { color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .btn { display: block; width: 100%; padding: 10px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; text-align: center; margin-bottom: 8px; }
+    .btn-primary { background: #4f46e5; color: white; }
+    .btn-primary:hover { background: #4338ca; }
+    .btn-primary:disabled { background: #c7d2fe; cursor: not-allowed; }
+    .btn-secondary { background: #f1f5f9; color: #334155; }
+    .btn-secondary:hover { background: #e2e8f0; }
+    .stats { font-size: 12px; color: #64748b; text-align: center; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <img src="../../icons/icon-48.png" alt="CI">
+    <h1>CollegeInsight Autofill</h1>
+  </div>
+
+  <div id="status" class="status disconnected">
+    Checking connection...
+  </div>
+
+  <div id="portal-info" class="portal-info" style="display: none;">
+    <div class="label">Current Page</div>
+    <div id="portal-text"></div>
+  </div>
+
+  <button id="fill-btn" class="btn btn-primary" disabled>
+    Fill This Page
+  </button>
+
+  <button id="dashboard-btn" class="btn btn-secondary"
+    onclick="window.open('https://www.collegeinsight.ai/dashboard', '_blank')">
+    View Dashboard
+  </button>
+
+  <div id="last-sync" class="stats"></div>
+  <div class="stats" id="stats"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
+
+  <script src="popup.js"></script>
+</body>
+</html>

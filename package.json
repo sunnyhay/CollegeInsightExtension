@@ -1,0 +1,14 @@
+{
+  "name": "college-insight-extension",
+  "version": "1.0.0",
+  "description": "CollegeInsight Autofill — Chrome Extension for filling college applications",
+  "private": true,
+  "scripts": {
+    "lint": "eslint src/",
+    "test": "jest --verbose"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "jest": "^30.3.0"
+  }
+}

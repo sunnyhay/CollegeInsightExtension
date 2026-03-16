@@ -1,0 +1,63 @@
+{
+  "manifest_version": 3,
+  "name": "CollegeInsight Autofill",
+  "version": "1.0.0",
+  "description": "Fill college applications from your CollegeInsight profile",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": [
+    "https://www.collegeinsight.ai/*",
+    "https://apply.commonapp.org/*",
+    "https://admission.universityofcalifornia.edu/*",
+    "https://apply.universityofcalifornia.edu/*",
+    "https://studentaid.gov/*",
+    "https://cssprofile.collegeboard.org/*",
+    "https://www.collegeboard.org/*",
+    "https://my.act.org/*",
+    "https://*.coalitionforcollegeaccess.org/*"
+  ],
+  "background": {
+    "service_worker": "src/background/service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.collegeinsight.ai/*"],
+      "js": ["src/content/ci-bridge.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://apply.commonapp.org/*",
+        "https://admission.universityofcalifornia.edu/*",
+        "https://apply.universityofcalifornia.edu/*",
+        "https://studentaid.gov/*",
+        "https://cssprofile.collegeboard.org/*",
+        "https://www.collegeboard.org/*",
+        "https://my.act.org/*"
+      ],
+      "js": [
+        "src/lib/telemetry.js",
+        "src/lib/ci-api.js",
+        "src/lib/field-mapper.js",
+        "src/content/portal-detector.js",
+        "src/content/input-simulator.js",
+        "src/content/form-filler.js",
+        "src/content/status-reporter.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "options_page": "src/options/options.html",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
+}
