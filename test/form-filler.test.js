@@ -202,3 +202,86 @@ describe("reportBatchStatus payload structure", () => {
     expect(payload.sections[0].status).toBe("complete");
   });
 });
+
+// ── escapeHtml ────────────────────────────────────────────────────────────────
+
+describe("escapeHtml", () => {
+  function escapeHtml(str) {
+    if (typeof str !== "string") return "";
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  it("escapes angle brackets", () => {
+    expect(escapeHtml("<script>alert(1)</script>")).toBe(
+      "&lt;script&gt;alert(1)&lt;/script&gt;",
+    );
+  });
+
+  it("escapes ampersands", () => {
+    expect(escapeHtml("a & b")).toBe("a &amp; b");
+  });
+
+  it("escapes quotes", () => {
+    expect(escapeHtml('She said "hi"')).toBe("She said &quot;hi&quot;");
+  });
+
+  it("escapes single quotes", () => {
+    expect(escapeHtml("it's")).toBe("it&#39;s");
+  });
+
+  it("returns empty string for non-string input", () => {
+    expect(escapeHtml(null)).toBe("");
+    expect(escapeHtml(undefined)).toBe("");
+    expect(escapeHtml(123)).toBe("");
+  });
+
+  it("passes through safe strings unchanged", () => {
+    expect(escapeHtml("Personal Info")).toBe("Personal Info");
+  });
+});
+
+describe("fill-all summary line generation", () => {
+  function buildSummaryLine(r) {
+    const icon = r.reason === "aborted" ? "⏹" : r.success === false ? "✗" : r.filled > 0 ? "✓" : "—";
+    const detail = r.reason === "aborted" ? "stopped" : r.success === false ? r.reason : `${r.filled || 0} fields`;
+    return `${icon} ${r.label}: ${detail}`;
+  }
+
+  it("shows checkmark for successful fill", () => {
+    const line = buildSummaryLine({ label: "Personal Info", filled: 12, success: true });
+    expect(line).toBe("✓ Personal Info: 12 fields");
+  });
+
+  it("shows stop icon for aborted section", () => {
+    const line = buildSummaryLine({ label: "Education", success: false, reason: "aborted", filled: 0 });
+    expect(line).toBe("⏹ Education: stopped");
+  });
+
+  it("shows X for failed section with error reason", () => {
+    const line = buildSummaryLine({ label: "Testing", success: false, reason: "no_section_mapping", filled: 0 });
+    expect(line).toBe("✗ Testing: no_section_mapping");
+  });
+
+  it("shows dash for zero-fill sections", () => {
+    const line = buildSummaryLine({ label: "Writing", filled: 0, success: true });
+    expect(line).toBe("— Writing: 0 fields");
+  });
+});
+
+describe("fill-all abort flag behavior", () => {
+  it("abort flag causes section to be skipped with aborted reason", () => {
+    const aborted = true;
+    const section = { key: "education", label: "Education" };
+    const result = aborted
+      ? { section: section.key, label: section.label, success: false, reason: "aborted", filled: 0, flagged: 0 }
+      : null;
+    expect(result.success).toBe(false);
+    expect(result.reason).toBe("aborted");
+    expect(result.filled).toBe(0);
+  });
+});

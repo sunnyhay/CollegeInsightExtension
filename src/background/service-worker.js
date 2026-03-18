@@ -1,9 +1,39 @@
 /**
  * Service Worker — background script for the CollegeInsight extension.
- * Manages auth tokens, CI API calls, and coordinates content scripts.
+ * Manages auth tokens, CI API calls, session caching, and coordinates content scripts.
  */
 
-const CI_API_BASE = "https://api.collegeinsight.ai";
+const CI_API_BASE_DEFAULT = "https://api.collegeinsight.ai";
+
+// Allow API base override via chrome.storage for local/dev testing.
+// Production users never set this — they always use the default.
+let CI_API_BASE = CI_API_BASE_DEFAULT;
+chrome.storage.local.get(["ciApiBase"], (data) => {
+  if (data.ciApiBase) CI_API_BASE = data.ciApiBase;
+});
+
+// -- Session Cache --
+// Caches Twin API responses per session to avoid redundant calls.
+// Twin data (profile, activities) reused across Fill All sections.
+// Portal maps cached for 7 days in chrome.storage.local.
+
+const sessionCache = new Map(); // key → { data, timestamp }
+const SESSION_CACHE_TTL = 300000; // 5 minutes for Twin data
+const PORTAL_MAP_TTL = 604800000; // 7 days for portal maps
+
+function getCached(key) {
+  const entry = sessionCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > SESSION_CACHE_TTL) {
+    sessionCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function setCache(key, data) {
+  sessionCache.set(key, { data, timestamp: Date.now() });
+}
 
 // -- Token management --
 
@@ -19,7 +49,10 @@ async function ciApiFetch(path, options = {}) {
   if (!token) {
     throw new Error("Not authenticated — open CollegeInsight to sign in");
   }
-  const resp = await fetch(`${CI_API_BASE}/${path}`, {
+  // Re-read API base on each call (picks up dev/test overrides set via chrome.storage)
+  const stored = await chrome.storage.local.get(["ciApiBase"]);
+  const apiBase = stored.ciApiBase || CI_API_BASE;
+  const resp = await fetch(`${apiBase}/${path}`, {
     ...options,
     headers: {
       Authorization: `Bearer ${token}`,
@@ -45,20 +78,43 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.type === "CI_FETCH_TWIN") {
+    const cacheKey = `twin:${message.endpoint}`;
+    const cached = getCached(cacheKey);
+    if (cached) {
+      sendResponse({ success: true, data: cached, cached: true });
+      return true;
+    }
     ciApiFetch(`twin/${message.endpoint}`).then(
-      (data) => sendResponse({ success: true, data }),
+      (data) => {
+        setCache(cacheKey, data);
+        sendResponse({ success: true, data });
+      },
       (err) => sendResponse({ success: false, error: err.message }),
     );
     return true;
   }
 
   if (message.type === "CI_FETCH_PORTAL_MAP") {
-    ciApiFetch(
-      `agent/portal-map?portal=${encodeURIComponent(message.portal)}`,
-    ).then(
-      (data) => sendResponse({ success: true, data }),
-      (err) => sendResponse({ success: false, error: err.message }),
-    );
+    // Portal maps use long-term cache (7 days via chrome.storage)
+    const storageKey = `portalMap:${message.portal}`;
+    chrome.storage.local.get([storageKey], (stored) => {
+      const entry = stored[storageKey];
+      if (entry && Date.now() - entry.timestamp < PORTAL_MAP_TTL) {
+        sendResponse({ success: true, data: entry.data, cached: true });
+        return;
+      }
+      ciApiFetch(
+        `agent/portal-map?portal=${encodeURIComponent(message.portal)}`,
+      ).then(
+        (data) => {
+          chrome.storage.local.set({
+            [storageKey]: { data, timestamp: Date.now() },
+          });
+          sendResponse({ success: true, data });
+        },
+        (err) => sendResponse({ success: false, error: err.message }),
+      );
+    });
     return true;
   }
 
