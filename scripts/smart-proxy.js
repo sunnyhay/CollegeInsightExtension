@@ -130,10 +130,6 @@ function classifyPrompt(body) {
     userMsg = String(userMsg || "");
   }
 
-  console.log(
-    `[CLASSIFY] extracted userMsg (len=${userMsg.length}): "${userMsg.substring(0, 80)}"`,
-  );
-
   // OpenClaw wraps user text in metadata like:
   // "System: [timestamp] WhatsApp gateway connected.\n\nConversation info...\n\nActual user message"
   // Extract just the actual user message (last non-empty line after metadata)
@@ -768,22 +764,6 @@ const server = http.createServer((req, res) => {
     }
 
     if (parsed && isResponsesApi) {
-      // DEBUG: Log input array roles and last user message
-      if (Array.isArray(parsed.input)) {
-        const roles = parsed.input.map((m) => m.role).join(",");
-        const lastUser = parsed.input.filter((m) => m.role === "user").pop();
-        const lastDev = parsed.input
-          .filter((m) => m.role === "developer")
-          .pop();
-        const lastAny = parsed.input[parsed.input.length - 1];
-        console.log(
-          `[DEBUG] roles=[${roles}] lastUser=${!!lastUser} lastDev=${!!lastDev} lastRole=${lastAny?.role} lastContent=${JSON.stringify(lastAny?.content)?.substring(0, 150)}`,
-        );
-      }
-      console.log(
-        `[DEBUG] keys=[${Object.keys(parsed)}] inputType=${typeof parsed.input} isArray=${Array.isArray(parsed.input)} hasPrevResp=${!!parsed.previous_response_id} input=${JSON.stringify(parsed.input)?.substring(0, 150)}`,
-      );
-
       // Inject store: true
       if (parsed.store === undefined || parsed.store === false) {
         parsed.store = true;

@@ -16,6 +16,17 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 
+// Load .env.local
+const envFile = path.join(__dirname, "..", ".env.local");
+if (fs.existsSync(envFile)) {
+  for (const line of fs.readFileSync(envFile, "utf8").split(/\r?\n/)) {
+    const match = line.match(/^([^#=]+?)=(.+)$/);
+    if (match && !process.env[match[1].trim()]) {
+      process.env[match[1].trim()] = match[2].trim();
+    }
+  }
+}
+
 const PROXY_URL = "http://localhost:4200/openai/responses";
 const API_KEY = process.env.AZURE_OPENAI_API_KEY;
 if (!API_KEY) {
