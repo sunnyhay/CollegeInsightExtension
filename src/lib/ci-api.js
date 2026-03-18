@@ -3,28 +3,45 @@
  * Communicates with the service worker which holds the auth token.
  */
 
+/** Send a message to the service worker with a timeout. */
+function sendMessageWithTimeout(message, timeoutMs = 5000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error("ci_error:timeout"));
+    }, timeoutMs);
+
+    chrome.runtime.sendMessage(message, (response) => {
+      clearTimeout(timer);
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      if (!response?.success) {
+        reject(new Error(response?.error || "ci_error:service_error"));
+        return;
+      }
+      resolve(response.data);
+    });
+  });
+}
+
 /**
  * Fetch Twin data from the CI backend via the service worker.
+ * Includes 1 retry with 2s delay on service errors.
  * @param {"profile"|"activities"|"essays"|"financial"|"colleges"} endpoint
  * @returns {Promise<object>} Twin data
  */
 async function fetchTwin(endpoint) {
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(
-      { type: "CI_FETCH_TWIN", endpoint },
-      (response) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-          return;
-        }
-        if (!response?.success) {
-          reject(new Error(response?.error || "Failed to fetch Twin data"));
-          return;
-        }
-        resolve(response.data);
-      },
-    );
-  });
+  try {
+    return await sendMessageWithTimeout({ type: "CI_FETCH_TWIN", endpoint });
+  } catch (err) {
+    // Retry once on service errors (5xx), not auth or timeout
+    if (err.message?.includes("service_error")) {
+      await new Promise((r) => setTimeout(r, 2000));
+      return await sendMessageWithTimeout({ type: "CI_FETCH_TWIN", endpoint });
+    }
+    throw err;
+  }
 }
 
 /**
@@ -33,22 +50,7 @@ async function fetchTwin(endpoint) {
  * @returns {Promise<object>} Portal map with sections and fields
  */
 async function fetchPortalMap(portal) {
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(
-      { type: "CI_FETCH_PORTAL_MAP", portal },
-      (response) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-          return;
-        }
-        if (!response?.success) {
-          reject(new Error(response?.error || "Failed to fetch portal map"));
-          return;
-        }
-        resolve(response.data);
-      },
-    );
-  });
+  return sendMessageWithTimeout({ type: "CI_FETCH_PORTAL_MAP", portal });
 }
 
 /**
@@ -57,22 +59,7 @@ async function fetchPortalMap(portal) {
  * @returns {Promise<object>}
  */
 async function postStatus(statusPayload) {
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(
-      { type: "CI_POST_STATUS", payload: statusPayload },
-      (response) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-          return;
-        }
-        if (!response?.success) {
-          reject(new Error(response?.error || "Failed to post status"));
-          return;
-        }
-        resolve(response.data);
-      },
-    );
-  });
+  return sendMessageWithTimeout({ type: "CI_POST_STATUS", payload: statusPayload });
 }
 
 /**

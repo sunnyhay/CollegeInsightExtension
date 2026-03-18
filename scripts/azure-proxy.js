@@ -92,7 +92,7 @@ const server = http.createServer((req, res) => {
     proxyReq.on("error", (err) => {
       console.error("Proxy error:", err.message);
       res.writeHead(502);
-      res.end(JSON.stringify({ error: "Proxy error", detail: err.message }));
+      res.end(JSON.stringify({ error: "Unable to connect to the AI service. Please try again." }));
     });
 
     proxyReq.write(body);

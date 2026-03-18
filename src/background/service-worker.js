@@ -81,19 +81,41 @@ async function ciApiFetch(path, options = {}) {
   // Re-read API base on each call (picks up dev/test overrides set via chrome.storage)
   const stored = await chrome.storage.local.get(["ciApiBase"]);
   const apiBase = stored.ciApiBase || CI_API_BASE;
-  const resp = await fetch(`${apiBase}/${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      correlationId: crypto.randomUUID(),
-      ...(options.headers || {}),
-    },
-  });
+
+  // 10-second timeout via AbortController
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+  let resp;
+  try {
+    resp = await fetch(`${apiBase}/${path}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        correlationId: crypto.randomUUID(),
+        ...(options.headers || {}),
+      },
+    });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === "AbortError") {
+      swTrackEvent("agent.api.timeout", { path });
+      throw new Error("ci_error:timeout");
+    }
+    throw err;
+  }
+  clearTimeout(timeoutId);
+
   if (!resp.ok) {
-    const err = `CI API error: ${resp.status} ${resp.statusText}`;
+    // Normalize error codes — never expose raw HTTP status to content scripts
+    const errorType = resp.status === 401 ? "auth_required"
+      : resp.status === 429 ? "rate_limited"
+      : resp.status >= 500 ? "service_error"
+      : "request_error";
     swTrackEvent("agent.api.error", { path, status: String(resp.status) });
-    throw new Error(err);
+    throw new Error(`ci_error:${errorType}`);
   }
   return resp.json();
 }

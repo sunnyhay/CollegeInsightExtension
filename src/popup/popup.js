@@ -20,12 +20,21 @@ chrome.runtime.sendMessage({ type: "CI_GET_STATUS" }, (resp) => {
   }
 });
 
-// Check current tab for portal detection
+// Check current tab for portal detection (with loading state + 5s timeout)
+fillBtn.textContent = "Checking connection...";
+fillBtn.disabled = true;
+
 chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
   const tab = tabs[0];
   if (!tab) return;
 
+  const portalTimeout = setTimeout(() => {
+    fillBtn.textContent = "Unable to check status";
+    fillBtn.disabled = true;
+  }, 5000);
+
   chrome.tabs.sendMessage(tab.id, { type: "CI_GET_PORTAL_INFO" }, (resp) => {
+    clearTimeout(portalTimeout);
     if (chrome.runtime.lastError || !resp?.portal) {
       portalInfoEl.style.display = "none";
       fillBtn.disabled = true;
@@ -36,6 +45,7 @@ chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     portalInfoEl.style.display = "block";
     portalTextEl.textContent = `${formatPortalName(resp.portal)} — ${resp.section} section`;
     fillBtn.disabled = false;
+    fillBtn.textContent = `Fill ${resp.section || "form"}`;
   });
 });
 

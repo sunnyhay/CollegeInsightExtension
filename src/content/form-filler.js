@@ -94,9 +94,24 @@ async function fillCurrentSection() {
       sectionMap.twinEndpoint?.replace("/twin/", "") ||
       TWIN_ENDPOINT_MAP[section] ||
       "profile";
-    const twinData = await fetchFromBackground("CI_FETCH_TWIN", {
-      endpoint: twinEndpoint,
-    });
+    let twinData;
+    try {
+      twinData = await fetchFromBackground("CI_FETCH_TWIN", {
+        endpoint: twinEndpoint,
+      });
+    } catch (twinErr) {
+      window.__ciTelemetry?.trackEvent("agent.twin.error", {
+        portal,
+        section,
+        error: twinErr?.message,
+      });
+      showFillError(
+        portal,
+        section,
+        "We couldn't load your data right now. Please try again in a moment.",
+      );
+      return { success: false, reason: "twin_fetch_failed" };
+    }
 
     // 3. Map fields to values
     const mapper = window.__ciFieldMapper;
@@ -203,13 +218,26 @@ function showFillError(portal, section, errorMessage) {
       .ci-close:hover { color: rgba(226,232,240,0.95); }
       .ci-msg { margin: 10px 0; color: rgba(200,195,225,0.75); font-size: 13px; line-height: 1.5; }
       .ci-footer { font-size: 11px; color: rgba(148,163,184,0.45); letter-spacing: 0.03em; }
+      .ci-actions { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+      .ci-retry { padding: 6px 16px; font-size: 13px; font-weight: 500;
+        background: rgba(253,186,116,0.15); border: 1px solid rgba(253,186,116,0.3);
+        color: #fdba74; border-radius: 6px; cursor: pointer; transition: background 0.2s; }
+      .ci-retry:hover { background: rgba(253,186,116,0.25); }
+      .ci-retry:focus-visible { outline: 2px solid #fdba74; outline-offset: 2px; }
+      .ci-close:focus-visible { outline: 2px solid rgba(200,195,225,0.5); outline-offset: 2px; }
+      @media (max-width: 640px) {
+        .ci-overlay { max-width: 90vw; right: 5vw; left: 5vw; top: 8px; }
+      }
     </style>
-    <div class="ci-overlay">
+    <div class="ci-overlay" role="alert">
       <div class="ci-header">
         <span class="ci-title"><span class="ci-icon">&#9888;</span> Fill Failed</span>
-        <button class="ci-close" id="ci-close">&times;</button>
+        <button class="ci-close" id="ci-close" aria-label="Dismiss error">&times;</button>
       </div>
       <div class="ci-msg">${safeMsg}</div>
+      <div class="ci-actions">
+        <button class="ci-retry" id="ci-retry" aria-label="Retry form filling">Try Again</button>
+      </div>
       <div class="ci-footer">${safePortal} &middot; ${safeSection}</div>
     </div>
   `;
@@ -217,6 +245,10 @@ function showFillError(portal, section, errorMessage) {
   shadow
     .getElementById("ci-close")
     ?.addEventListener("click", () => host.remove());
+  shadow.getElementById("ci-retry")?.addEventListener("click", () => {
+    host.remove();
+    fillCurrentSection();
+  });
   document.body.appendChild(host);
   setTimeout(() => host.remove(), 30000);
 }
@@ -376,10 +408,10 @@ function showPreviewOverlay(filled, flagged, portal, section) {
       .ci-footer { margin-top: 10px; font-size: 11px; color: rgba(148,163,184,0.45); letter-spacing: 0.03em; }
       .ci-time { color: #fdba74; font-weight: 500; animation: ciPulse 3s ease-in-out 1; }
     </style>
-    <div class="ci-overlay">
+    <div class="ci-overlay" role="status">
       <div class="ci-header">
         <span class="ci-title">&#9881; CollegeInsight Autofill</span>
-        <button class="ci-close" id="ci-close">&times;</button>
+        <button class="ci-close" id="ci-close" aria-label="Dismiss">&times;</button>
       </div>
       <div class="ci-stats">
         <div class="ci-stat ci-filled">&#10003; ${filled} fields filled</div>
@@ -578,7 +610,7 @@ function showFillAllProgress(current, total, message) {
       <div class="ci-title">&#9881; Filling Application</div>
       <div class="ci-bar-bg"><div class="ci-bar" style="width: ${pct}%"></div></div>
       <div class="ci-msg">${message} (${current + 1}/${total})</div>
-      <button class="ci-abort" id="ci-abort">Stop filling</button>
+      <button class="ci-abort" id="ci-abort" aria-label="Stop filling application">Stop filling</button>
     </div>
   `;
 
@@ -650,8 +682,8 @@ function showFillAllSummary(results, totalFilled, totalFlagged) {
         color: rgba(200,195,225,0.5); float: right; transition: color 0.2s; }
       .ci-close:hover { color: rgba(226,232,240,0.95); }
     </style>
-    <div class="ci-summary">
-      <button class="ci-close" id="ci-close">&times;</button>
+    <div class="ci-summary" role="status">
+      <button class="ci-close" id="ci-close" aria-label="Dismiss">&times;</button>
       <div class="ci-title">&#10024; Fill Complete!</div>
       <div class="ci-sections">${sectionLines}</div>
       <div class="ci-total">${totalFilled} fields filled, ${totalFlagged} need review</div>
