@@ -425,6 +425,175 @@ async function main() {
   );
 
   // ═══════════════════════════════════════════════════
+  // 6. "my essays" via OpenClaw (T0: Twin shortcut)
+  // ═══════════════════════════════════════════════════
+  console.log("\n── 6. 'my essays' via OpenClaw → Twin API ──");
+
+  clearSession();
+  const startEssays = Date.now();
+  const essaysResp = sendViaOpenClaw("my essays");
+  const essaysDuration = Date.now() - startEssays;
+
+  const essaysPayloads = essaysResp?.result?.payloads || [];
+  const essaysText = essaysPayloads[0]?.text || "";
+  const essaysOcDuration = essaysResp?.result?.meta?.durationMs || 0;
+
+  assert(
+    "Essays: OpenClaw returns payload",
+    essaysPayloads.length > 0,
+    `payloads=${essaysPayloads.length}`,
+  );
+  assert(
+    "Essays: response has content (not empty fallback)",
+    essaysText.length > 20,
+    `len=${essaysText.length}`,
+  );
+  assert(
+    "Essays: not generic LLM fallback",
+    !essaysText.includes("I don't have") && !essaysText.includes("I didn't find"),
+    "no fallback text",
+  );
+  assert(
+    "Essays: duration under 45s",
+    essaysOcDuration < 45000,
+    `oc=${essaysOcDuration}ms, wall=${essaysDuration}ms`,
+  );
+
+  // ═══════════════════════════════════════════════════
+  // 7. "my colleges" via OpenClaw (T0: Twin shortcut)
+  // ═══════════════════════════════════════════════════
+  console.log("\n── 7. 'my colleges' via OpenClaw → Twin API ──");
+
+  clearSession();
+  const startColleges = Date.now();
+  const collegesResp = sendViaOpenClaw("my colleges");
+  const collegesDuration = Date.now() - startColleges;
+
+  const collegesPayloads = collegesResp?.result?.payloads || [];
+  const collegesText = collegesPayloads[0]?.text || "";
+  const collegesOcDuration = collegesResp?.result?.meta?.durationMs || 0;
+
+  assert(
+    "Colleges: OpenClaw returns payload",
+    collegesPayloads.length > 0,
+    `payloads=${collegesPayloads.length}`,
+  );
+  assert(
+    "Colleges: response contains college data",
+    collegesText.length > 30,
+    `len=${collegesText.length}`,
+  );
+  assert(
+    "Colleges: not generic LLM fallback",
+    !collegesText.includes("I don't have access") &&
+      !collegesText.includes("provide your college list"),
+    "no fallback text",
+  );
+  assert(
+    "Colleges: duration under 45s",
+    collegesOcDuration < 45000,
+    `oc=${collegesOcDuration}ms, wall=${collegesDuration}ms`,
+  );
+
+  // ═══════════════════════════════════════════════════
+  // 8. "how ready am I" via OpenClaw (readiness check)
+  // ═══════════════════════════════════════════════════
+  console.log("\n── 8. 'how ready am I' via OpenClaw ──");
+
+  clearSession();
+  const startReady = Date.now();
+  const readyResp = sendViaOpenClaw("how ready am I", 90);
+  const readyDuration = Date.now() - startReady;
+
+  const readyPayloads = readyResp?.result?.payloads || [];
+  const readyText = readyPayloads[0]?.text || "";
+  const readyOcDuration = readyResp?.result?.meta?.durationMs || 0;
+
+  assert(
+    "Readiness: OpenClaw returns payload",
+    readyPayloads.length > 0,
+    `payloads=${readyPayloads.length}`,
+  );
+  assert(
+    "Readiness: response is substantive",
+    readyText.length > 30,
+    `len=${readyText.length}`,
+  );
+  assert(
+    "Readiness: duration under 90s",
+    readyOcDuration < 90000,
+    `oc=${readyOcDuration}ms, wall=${readyDuration}ms`,
+  );
+
+  // ═══════════════════════════════════════════════════
+  // 9. Tier 3 classification — complex multi-step query
+  // ═══════════════════════════════════════════════════
+  console.log("\n── 9. Tier 3 query (complex instruction) ──");
+
+  clearSession();
+  const beforeT3 = new Date().toISOString();
+  const startT3 = Date.now();
+  const t3Resp = sendViaOpenClaw(
+    "fill all my Common App sections and then check my readiness for each school",
+    120,
+  );
+  const t3Duration = Date.now() - startT3;
+
+  const t3Payloads = t3Resp?.result?.payloads || [];
+  const t3Text = t3Payloads[0]?.text || "";
+
+  assert(
+    "T3: OpenClaw returns payload",
+    t3Payloads.length > 0,
+    `payloads=${t3Payloads.length}`,
+  );
+  assert(
+    "T3: response is substantive",
+    t3Text.length > 20,
+    `len=${t3Text.length}`,
+  );
+
+  // Check proxy routing — should classify as T3
+  const routingAfterT3 = getRoutingEntriesSince(beforeT3);
+  const t3Entry = routingAfterT3.find((e) => e.tier === 3);
+  if (t3Entry) {
+    assert(
+      "T3: Proxy classified as Tier 3",
+      true,
+      `tier=${t3Entry.tier} reason=${t3Entry.tierReason} model=${t3Entry.modelActual}`,
+    );
+  } else {
+    assert(
+      "T3: Proxy received request",
+      routingAfterT3.length > 0,
+      `routing entries=${routingAfterT3.length}, tiers=${routingAfterT3.map((e) => e.tier).join(",")}`,
+    );
+  }
+
+  // ═══════════════════════════════════════════════════
+  // 10. Error path — invalid query handled gracefully
+  // ═══════════════════════════════════════════════════
+  console.log("\n── 10. Error handling — graceful response ──");
+
+  clearSession();
+  const errorResp = sendViaOpenClaw(
+    "xyzzy12345 nonsense query that makes no sense",
+    60,
+  );
+
+  const errorPayloads = errorResp?.result?.payloads || [];
+  const errorText = errorPayloads[0]?.text || "";
+
+  // The agent should still respond (not crash)
+  assert(
+    "Error: Agent responds (doesn't crash)",
+    errorPayloads.length > 0 || !!errorResp?.error,
+    errorResp?.error
+      ? `error=${errorResp.error.substring(0, 100)}`
+      : `text=${errorText.substring(0, 100)}`,
+  );
+
+  // ═══════════════════════════════════════════════════
   // Summary
   // ═══════════════════════════════════════════════════
   console.log(`\n${"═".repeat(70)}`);

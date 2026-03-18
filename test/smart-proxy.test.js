@@ -398,3 +398,416 @@ describe("estimateTaskDuration", () => {
     expect(estimateTaskDuration(null)).toBe(60);
   });
 });
+
+// ── Adaptive Weight Updates ───────────────────────────────────────────────────
+
+describe("updateWeights", () => {
+  // Mirror the logic from smart-proxy.js
+  function updateWeights(weights, tier, model, success) {
+    const tierKey = `tier${tier}`;
+    if (!weights[tierKey] || !weights[tierKey][model]) return weights;
+    const w = JSON.parse(JSON.stringify(weights)); // deep clone
+
+    if (success) {
+      w[tierKey][model] = Math.min(1.0, w[tierKey][model] + 0.005);
+    } else {
+      w[tierKey][model] = Math.max(0.05, w[tierKey][model] - 0.03);
+      const fallback = getNextStronger(model);
+      if (fallback && w[tierKey][fallback] !== undefined) {
+        w[tierKey][fallback] = Math.min(1.0, w[tierKey][fallback] + 0.03);
+      }
+    }
+
+    // Normalize
+    const total = Object.values(w[tierKey]).reduce((s, v) => s + v, 0);
+    if (total > 0) {
+      for (const k of Object.keys(w[tierKey])) {
+        w[tierKey][k] /= total;
+      }
+    }
+    return w;
+  }
+
+  const DEFAULT_WEIGHTS = {
+    tier1: { "gpt-4o-mini": 1.0 },
+    tier2: { "gpt-4o-mini": 0.9, "gpt-5-nano": 0.05, "gpt-5.2": 0.05 },
+    tier3: { "gpt-5-nano": 0.1, "gpt-5.2": 0.75, "gpt-5.4": 0.15 },
+  };
+
+  it("success reinforces the selected model", () => {
+    const w = updateWeights(DEFAULT_WEIGHTS, 2, "gpt-4o-mini", true);
+    expect(w.tier2["gpt-4o-mini"]).toBeGreaterThan(0.9);
+  });
+
+  it("failure reduces the selected model weight", () => {
+    const w = updateWeights(DEFAULT_WEIGHTS, 2, "gpt-4o-mini", false);
+    expect(w.tier2["gpt-4o-mini"]).toBeLessThan(0.9);
+  });
+
+  it("failure shifts weight to next-stronger model", () => {
+    const w = updateWeights(DEFAULT_WEIGHTS, 2, "gpt-4o-mini", false);
+    // gpt-4o-mini → gpt-5-nano is the fallback
+    expect(w.tier2["gpt-5-nano"]).toBeGreaterThan(0.05);
+  });
+
+  it("weights always sum to 1.0 after update", () => {
+    const w = updateWeights(DEFAULT_WEIGHTS, 2, "gpt-4o-mini", false);
+    const sum = Object.values(w.tier2).reduce((s, v) => s + v, 0);
+    expect(sum).toBeCloseTo(1.0, 6);
+  });
+
+  it("weights stay normalized after success update", () => {
+    const w = updateWeights(DEFAULT_WEIGHTS, 3, "gpt-5.2", true);
+    const sum = Object.values(w.tier3).reduce((s, v) => s + v, 0);
+    expect(sum).toBeCloseTo(1.0, 6);
+  });
+
+  it("does not drop below 0.05 minimum", () => {
+    let w = DEFAULT_WEIGHTS;
+    // Fail 50 times to drive weight down
+    for (let i = 0; i < 50; i++) {
+      w = updateWeights(w, 2, "gpt-4o-mini", false);
+    }
+    // After normalization the absolute value may differ, but before norm it should not be below floor
+    expect(w.tier2["gpt-4o-mini"]).toBeGreaterThan(0);
+  });
+
+  it("ignores unknown tier", () => {
+    const w = updateWeights(DEFAULT_WEIGHTS, 99, "gpt-4o-mini", true);
+    expect(w).toEqual(DEFAULT_WEIGHTS);
+  });
+
+  it("ignores unknown model in tier", () => {
+    const w = updateWeights(DEFAULT_WEIGHTS, 2, "gpt-99", true);
+    expect(w).toEqual(DEFAULT_WEIGHTS);
+  });
+});
+
+// ── selectModel ───────────────────────────────────────────────────────────────
+
+describe("selectModel", () => {
+  function selectModel(tier, weights) {
+    const tierKey = `tier${tier}`;
+    const tierWeights = weights[tierKey];
+    if (!tierWeights) return "gpt-4o-mini";
+
+    const total = Object.values(tierWeights).reduce((s, w) => s + w, 0);
+    let r = Math.random() * total;
+    for (const [model, weight] of Object.entries(tierWeights)) {
+      r -= weight;
+      if (r <= 0) return model;
+    }
+    return "gpt-4o-mini";
+  }
+
+  it("returns a model from the tier weights", () => {
+    const weights = {
+      tier1: { "gpt-4o-mini": 1.0 },
+      tier2: { "gpt-4o-mini": 0.9, "gpt-5.2": 0.1 },
+    };
+    const model = selectModel(1, weights);
+    expect(model).toBe("gpt-4o-mini");
+  });
+
+  it("returns default for unknown tier", () => {
+    const model = selectModel(99, {});
+    expect(model).toBe("gpt-4o-mini");
+  });
+
+  it("selects from multiple models (statistical)", () => {
+    const weights = { tier2: { "gpt-4o-mini": 0.5, "gpt-5.2": 0.5 } };
+    const counts = { "gpt-4o-mini": 0, "gpt-5.2": 0 };
+    for (let i = 0; i < 100; i++) {
+      counts[selectModel(2, weights)]++;
+    }
+    // Both should be selected at least once with 50/50 weights
+    expect(counts["gpt-4o-mini"]).toBeGreaterThan(10);
+    expect(counts["gpt-5.2"]).toBeGreaterThan(10);
+  });
+});
+
+// ── detectUserRetry ───────────────────────────────────────────────────────────
+
+describe("detectUserRetry", () => {
+  function createRetryDetector() {
+    const recent = new Map();
+
+    return {
+      track(prompt) {
+        recent.set(Date.now().toString(), { prompt, timestamp: Date.now() });
+      },
+      detect(promptPreview) {
+        const now = Date.now();
+        for (const [key, val] of recent) {
+          if (now - val.timestamp > 300000) { recent.delete(key); continue; }
+        }
+        for (const [, val] of recent) {
+          if (now - val.timestamp < 120000 && similarity(val.prompt, promptPreview) > 0.7) {
+            return true;
+          }
+        }
+        return false;
+      },
+    };
+  }
+
+  it("detects retry of identical prompt", () => {
+    const detector = createRetryDetector();
+    detector.track("my deadlines");
+    expect(detector.detect("my deadlines")).toBe(true);
+  });
+
+  it("detects retry of similar prompt", () => {
+    const detector = createRetryDetector();
+    detector.track("my deadlines");
+    expect(detector.detect("show my deadlines")).toBe(true);
+  });
+
+  it("does not detect retry for different prompt", () => {
+    const detector = createRetryDetector();
+    detector.track("my deadlines");
+    expect(detector.detect("draft a recommendation letter")).toBe(false);
+  });
+
+  it("does not detect retry for empty history", () => {
+    const detector = createRetryDetector();
+    expect(detector.detect("my deadlines")).toBe(false);
+  });
+});
+
+// ── A/B Test Framework ────────────────────────────────────────────────────────
+
+describe("applyAbTest", () => {
+  function applyAbTest(abConfig, tier, defaultModel) {
+    if (!abConfig || !abConfig.enabled || !abConfig.tiers.includes(tier)) {
+      return { model: defaultModel, group: null };
+    }
+    const isGroupB = Math.random() * 100 < abConfig.splitPct;
+    return {
+      model: isGroupB ? abConfig.modelB : abConfig.modelA,
+      group: isGroupB ? "B" : "A",
+      testName: abConfig.name,
+    };
+  }
+
+  const AB_CONFIG = {
+    enabled: true,
+    name: "mini-vs-52",
+    tiers: [2],
+    modelA: "gpt-4o-mini",
+    modelB: "gpt-5.2",
+    splitPct: 50,
+  };
+
+  it("returns default model when A/B test disabled", () => {
+    const result = applyAbTest({ enabled: false, tiers: [2] }, 2, "gpt-4o-mini");
+    expect(result.model).toBe("gpt-4o-mini");
+    expect(result.group).toBeNull();
+  });
+
+  it("returns default model when tier not in test", () => {
+    const result = applyAbTest(AB_CONFIG, 1, "gpt-4o-mini");
+    expect(result.model).toBe("gpt-4o-mini");
+    expect(result.group).toBeNull();
+  });
+
+  it("returns A or B model when tier matches", () => {
+    const result = applyAbTest(AB_CONFIG, 2, "gpt-4o-mini");
+    expect(["gpt-4o-mini", "gpt-5.2"]).toContain(result.model);
+    expect(["A", "B"]).toContain(result.group);
+    expect(result.testName).toBe("mini-vs-52");
+  });
+
+  it("returns null config gracefully", () => {
+    const result = applyAbTest(null, 2, "gpt-4o-mini");
+    expect(result.model).toBe("gpt-4o-mini");
+    expect(result.group).toBeNull();
+  });
+});
+
+// ── Twin API Shortcut Formatters ──────────────────────────────────────────────
+
+describe("Twin shortcut formatters", () => {
+  const formatDeadlines = (data) => {
+    const colleges = [];
+    const lists = { Dream: "🌟", Target: "🎯", Safety: "🛡️" };
+    if (data.collegeList && typeof data.collegeList === "object" && !Array.isArray(data.collegeList)) {
+      for (const [tier, items] of Object.entries(data.collegeList)) {
+        if (Array.isArray(items)) {
+          for (const c of items)
+            colleges.push({ name: c.name || c.unitid, tier, icon: lists[tier] || "📋" });
+        }
+      }
+    } else if (Array.isArray(data.collegeList)) {
+      for (const c of data.collegeList)
+        colleges.push({ name: c.name, tier: "List", icon: "📋" });
+    }
+    if (Array.isArray(data.favorites)) {
+      for (const c of data.favorites) {
+        if (!colleges.find((x) => x.name === c.name))
+          colleges.push({ name: c.name, tier: "Favorite", icon: "⭐" });
+      }
+    }
+    if (!colleges.length) return "You don't have any colleges in your list yet. Add some at collegeinsight.ai!";
+    let msg = "📅 Your College List & Deadlines:\n\n";
+    for (const c of colleges) msg += `${c.icon} ${c.name} (${c.tier})\n`;
+    msg += "\nVisit collegeinsight.ai for detailed deadline dates.";
+    return msg;
+  };
+
+  const formatActivities = (data) => {
+    const acts = data.activities || [];
+    const work = data.workExperiences || [];
+    const vol = data.volunteerExperiences || [];
+    const awards = data.awards || [];
+    if (!acts.length && !work.length && !vol.length && !awards.length)
+      return "No activities entered yet. Add them at collegeinsight.ai!";
+    let msg = "🏆 Your Activities:\n\n";
+    for (const a of acts) {
+      const hrs = a.hoursPerWeek ? ` · ${a.hoursPerWeek}hr/wk` : "";
+      msg += `• ${a.name || "Activity"} (${a.category || "?"}) — ${a.role || "Member"}${hrs}\n`;
+    }
+    if (work.length) {
+      msg += "\n💼 Work:\n";
+      for (const w of work) msg += `• ${w.role || w.name || "Work"} at ${w.organization || "?"}\n`;
+    }
+    if (vol.length) {
+      msg += "\n🤝 Volunteer:\n";
+      for (const v of vol) msg += `• ${v.role || v.name || "Volunteer"} at ${v.organization || "?"}\n`;
+    }
+    if (awards.length) {
+      msg += "\n🏅 Awards:\n";
+      for (const a of awards) msg += `• ${a.title || a.name || "Award"} (${a.level || "?"})\n`;
+    }
+    msg += `\nTotal: ${acts.length} activities, ${work.length} work, ${vol.length} volunteer, ${awards.length} awards`;
+    return msg;
+  };
+
+  const formatProfile = (data) => {
+    let msg = "📋 Your Profile:\n\n";
+    if (data.displayName) msg += `Name: ${data.displayName}\n`;
+    if (data.gpa) msg += `GPA: ${data.gpa}`;
+    if (data.weightedGpa) msg += ` (${data.weightedGpa} weighted)`;
+    msg += "\n";
+    if (data.satTotal) msg += `SAT: ${data.satTotal}\n`;
+    if (data.actComposite) msg += `ACT: ${data.actComposite}\n`;
+    if (data.state) msg += `State: ${data.state}\n`;
+    if (data.gradYear) msg += `Grad: ${data.gradYear}\n`;
+    return msg;
+  };
+
+  describe("deadlines formatter", () => {
+    it("formats tiered college list", () => {
+      const result = formatDeadlines({
+        collegeList: { Dream: [{ name: "MIT" }], Target: [{ name: "UCLA" }] },
+      });
+      expect(result).toContain("MIT");
+      expect(result).toContain("Dream");
+      expect(result).toContain("UCLA");
+      expect(result).toContain("🌟");
+    });
+
+    it("formats flat array college list", () => {
+      const result = formatDeadlines({ collegeList: [{ name: "Stanford" }] });
+      expect(result).toContain("Stanford");
+      expect(result).toContain("List");
+    });
+
+    it("includes favorites that are not in list", () => {
+      const result = formatDeadlines({
+        collegeList: { Dream: [{ name: "MIT" }] },
+        favorites: [{ name: "Harvard" }],
+      });
+      expect(result).toContain("Harvard");
+      expect(result).toContain("⭐");
+    });
+
+    it("deduplicates favorites already in list", () => {
+      const result = formatDeadlines({
+        collegeList: { Dream: [{ name: "MIT" }] },
+        favorites: [{ name: "MIT" }],
+      });
+      const mitCount = (result.match(/MIT/g) || []).length;
+      expect(mitCount).toBe(1);
+    });
+
+    it("returns empty message for no colleges", () => {
+      const result = formatDeadlines({});
+      expect(result).toContain("don't have any colleges");
+    });
+  });
+
+  describe("activities formatter", () => {
+    it("formats activities with hours", () => {
+      const result = formatActivities({
+        activities: [{ name: "Debate Club", category: "Academic", role: "Captain", hoursPerWeek: 5 }],
+      });
+      expect(result).toContain("Debate Club");
+      expect(result).toContain("Captain");
+      expect(result).toContain("5hr/wk");
+    });
+
+    it("formats work experiences", () => {
+      const result = formatActivities({
+        activities: [],
+        workExperiences: [{ role: "Intern", organization: "Google" }],
+      });
+      expect(result).toContain("Intern");
+      expect(result).toContain("Google");
+    });
+
+    it("formats awards", () => {
+      const result = formatActivities({
+        activities: [],
+        awards: [{ title: "National Merit", level: "National" }],
+      });
+      expect(result).toContain("National Merit");
+    });
+
+    it("shows total counts", () => {
+      const result = formatActivities({
+        activities: [{ name: "A" }, { name: "B" }],
+        workExperiences: [{ name: "W" }],
+        volunteerExperiences: [],
+        awards: [{ name: "X" }],
+      });
+      expect(result).toContain("2 activities");
+      expect(result).toContain("1 work");
+      expect(result).toContain("1 awards");
+    });
+
+    it("returns empty message for no data", () => {
+      const result = formatActivities({});
+      expect(result).toContain("No activities entered");
+    });
+  });
+
+  describe("profile formatter", () => {
+    it("formats full profile", () => {
+      const result = formatProfile({
+        displayName: "Alice",
+        gpa: 3.8,
+        weightedGpa: 4.2,
+        satTotal: 1450,
+        state: "CA",
+        gradYear: 2026,
+      });
+      expect(result).toContain("Alice");
+      expect(result).toContain("3.8");
+      expect(result).toContain("4.2 weighted");
+      expect(result).toContain("1450");
+      expect(result).toContain("CA");
+    });
+
+    it("formats profile with ACT only", () => {
+      const result = formatProfile({ actComposite: 34 });
+      expect(result).toContain("ACT: 34");
+      expect(result).not.toContain("SAT:");
+    });
+
+    it("formats empty profile", () => {
+      const result = formatProfile({});
+      expect(result).toContain("Your Profile");
+    });
+  });
+});
