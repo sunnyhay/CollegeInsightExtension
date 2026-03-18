@@ -4,6 +4,35 @@
  */
 
 const CI_API_BASE_DEFAULT = "https://api.collegeinsight.ai";
+const AI_ENDPOINT = "https://dc.services.visualstudio.com/v2/track";
+const AI_IKEY = "0f2a4e7d-8b3c-4d1e-9f5a-6c7b8d9e0f1a";
+
+/** Lightweight telemetry for the service worker (no window access). */
+function swTrackEvent(name, properties = {}) {
+  const envelope = {
+    name: "Microsoft.ApplicationInsights.Event",
+    time: new Date().toISOString(),
+    iKey: AI_IKEY,
+    data: {
+      baseType: "EventData",
+      baseData: {
+        ver: 2,
+        name,
+        properties: {
+          agentType: "extension",
+          context: "service_worker",
+          ...properties,
+        },
+      },
+    },
+  };
+  fetch(AI_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(envelope),
+    keepalive: true,
+  }).catch(() => {});
+}
 
 // Allow API base override via chrome.storage for local/dev testing.
 // Production users never set this — they always use the default.
@@ -62,7 +91,9 @@ async function ciApiFetch(path, options = {}) {
     },
   });
   if (!resp.ok) {
-    throw new Error(`CI API error: ${resp.status} ${resp.statusText}`);
+    const err = `CI API error: ${resp.status} ${resp.statusText}`;
+    swTrackEvent("agent.api.error", { path, status: String(resp.status) });
+    throw new Error(err);
   }
   return resp.json();
 }
@@ -89,7 +120,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         setCache(cacheKey, data);
         sendResponse({ success: true, data });
       },
-      (err) => sendResponse({ success: false, error: err.message }),
+      (err) => {
+        swTrackEvent("agent.api.error", {
+          endpoint: "twin",
+          error: err.message,
+        });
+        sendResponse({ success: false, error: err.message });
+      },
     );
     return true;
   }
@@ -112,7 +149,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           });
           sendResponse({ success: true, data });
         },
-        (err) => sendResponse({ success: false, error: err.message }),
+        (err) => {
+          swTrackEvent("agent.api.error", {
+            endpoint: "portal-map",
+            portal: message.portal,
+            error: err.message,
+          });
+          sendResponse({ success: false, error: err.message });
+        },
       );
     });
     return true;
@@ -124,7 +168,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       body: JSON.stringify(message.payload),
     }).then(
       (data) => sendResponse({ success: true, data }),
-      (err) => sendResponse({ success: false, error: err.message }),
+      (err) => {
+        swTrackEvent("agent.api.error", {
+          endpoint: "status",
+          error: err.message,
+        });
+        sendResponse({ success: false, error: err.message });
+      },
     );
     return true;
   }
@@ -138,7 +188,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }),
     }).then(
       (data) => sendResponse({ success: true, data }),
-      (err) => sendResponse({ success: false, error: err.message }),
+      (err) => {
+        swTrackEvent("agent.api.error", {
+          endpoint: "ai-map",
+          error: err.message,
+        });
+        sendResponse({ success: false, error: err.message });
+      },
     );
     return true;
   }
@@ -207,7 +263,12 @@ async function handleFillSection(portal, section, college) {
         startedAt: Date.now(),
       },
     });
-  } catch {
+  } catch (err) {
+    swTrackEvent("agent.fill_section.error", {
+      portal,
+      section,
+      error: err?.message,
+    });
     // Fallback: open dashboard
     await chrome.tabs.create({ url: `${baseUrl}/dashboard` });
   }
@@ -217,8 +278,6 @@ async function handleFillSection(portal, section, college) {
 
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === "install") {
-    console.log(
-      "[CI Extension] Installed — open CollegeInsight.ai to connect.",
-    );
+    swTrackEvent("agent.installed");
   }
 });

@@ -55,6 +55,10 @@ async function fillCurrentSection() {
       sectionMap = portalMap.sections?.[section];
     } catch {
       // Portal map not found — try AI fallback
+      window.__ciTelemetry?.trackEvent("agent.portal_map.miss", {
+        portal,
+        section,
+      });
     }
 
     if (!sectionMap) {
@@ -148,6 +152,11 @@ async function fillCurrentSection() {
 
     return { success: true, filled: totalFilled, flagged: totalFlagged };
   } catch (err) {
+    window.__ciTelemetry?.trackEvent("agent.fill.error", {
+      portal,
+      section,
+      error: err?.message,
+    });
     console.error("[CI] Fill failed:", err);
     showFillError(portal, section, err.message);
     return { success: false, reason: err.message };
@@ -165,7 +174,9 @@ function showFillError(portal, section, errorMessage) {
   host.id = "ci-overlay-host";
   const shadow = host.attachShadow({ mode: "closed" });
 
-  const safeMsg = escapeHtml(errorMessage || "An unexpected error occurred. Please try again.");
+  const safeMsg = escapeHtml(
+    errorMessage || "An unexpected error occurred. Please try again.",
+  );
   const safePortal = escapeHtml(portal || "");
   const safeSection = escapeHtml(section || "");
 
@@ -203,7 +214,9 @@ function showFillError(portal, section, errorMessage) {
     </div>
   `;
 
-  shadow.getElementById("ci-close")?.addEventListener("click", () => host.remove());
+  shadow
+    .getElementById("ci-close")
+    ?.addEventListener("click", () => host.remove());
   document.body.appendChild(host);
   setTimeout(() => host.remove(), 30000);
 }
@@ -453,7 +466,14 @@ async function fillAllSections() {
   for (let i = 0; i < sections.length; i++) {
     // Check if user clicked "Stop filling"
     if (window.__ciFillAllAborted) {
-      results.push({ section: sections[i].key, label: sections[i].label, success: false, reason: "aborted", filled: 0, flagged: 0 });
+      results.push({
+        section: sections[i].key,
+        label: sections[i].label,
+        success: false,
+        reason: "aborted",
+        filled: 0,
+        flagged: 0,
+      });
       break;
     }
 
@@ -581,9 +601,28 @@ function showFillAllSummary(results, totalFilled, totalFlagged) {
   const timeSaved = Math.round((totalFilled * 30) / 60);
   const sectionLines = results
     .map((r) => {
-      const icon = r.reason === "aborted" ? "⏹" : r.success === false ? "✗" : r.filled > 0 ? "✓" : "—";
-      const detail = r.reason === "aborted" ? "stopped" : r.success === false ? escapeHtml(r.reason) : `${r.filled || 0} fields`;
-      const color = r.reason === "aborted" ? "#fbbf24" : r.success === false ? "#f87171" : r.filled > 0 ? "#4ade80" : "rgba(148,163,184,0.45)";
+      const icon =
+        r.reason === "aborted"
+          ? "⏹"
+          : r.success === false
+            ? "✗"
+            : r.filled > 0
+              ? "✓"
+              : "—";
+      const detail =
+        r.reason === "aborted"
+          ? "stopped"
+          : r.success === false
+            ? escapeHtml(r.reason)
+            : `${r.filled || 0} fields`;
+      const color =
+        r.reason === "aborted"
+          ? "#fbbf24"
+          : r.success === false
+            ? "#f87171"
+            : r.filled > 0
+              ? "#4ade80"
+              : "rgba(148,163,184,0.45)";
       return `<div style="color:${color}">${icon} ${escapeHtml(r.label)}: ${detail}</div>`;
     })
     .join("");
