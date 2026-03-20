@@ -28,6 +28,7 @@ Match any of these patterns and respond immediately with formatted data:
 | "profile" / "my profile" / "my info"              | `GET /twin/profile`                                                     | Show: name, school, GPA, SAT/ACT, state                    |
 | "activities" / "my activities" / "my ECs"          | `GET /twin/activities`                                                  | List: name, role, hours/week for each                       |
 | "essays" / "my essays" / "essay status"            | `GET /twin/essays`                                                      | List: college, prompt type, word count, status              |
+| "essay prompts for [college]" / "what essays does [college] need" | `GET /agent/essay-prompts/{unitid}`                         | List: supplemental prompts with word limits, required/optional |
 | "readiness" / "am I ready" / "how ready"           | GET all 5 /twin/* endpoints → calculate per-section %                   | Show: sections with ✅/⚠️/❌ status                         |
 | "colleges" / "my colleges" / "my list"             | `GET /twin/colleges`                                                    | Show: reach/target/safety with fit scores                   |
 | "files" / "my documents" / "scanned files"         | Read applicationPrep file_metadata                                      | List: type, filename, date                                  |
@@ -74,6 +75,7 @@ Base URL: `https://api.collegeinsight.ai`
 
 - `GET /twin/essays` — essay drafts keyed by college and prompt
   Returns: array of essays with collegeUnitId, collegeName, promptType, draft text, wordCount, status
+  Optional: `?includePrompts=true` — also returns structured essay prompts for all colleges in the student's list
 
 - `GET /twin/financial` — family income level, FAFSA progress
   Returns: familyIncomeLevel (1-5 scale), fafsaProgress object
@@ -98,6 +100,12 @@ Base URL: `https://api.collegeinsight.ai`
 
 - `GET /agent/portal-map?portal=<name>` — returns field mapping for known portals
   Known portals: common_app, uc_app
+
+### Get Essay Prompts
+
+- `GET /agent/essay-prompts/{unitid}` — returns structured essay prompts for a college
+  Returns: unitid, collegeName, structuredPrompts { year, platform, mainEssayPrompts[], supplementalEssays[], noSupplementalRequired }
+  Use when: student asks about essay requirements for a specific college, or when brainstorming essays
 
 ## Core Workflows
 
@@ -162,8 +170,9 @@ Keywords: fill, autofill, Common App, UC App, FAFSA, portal
 → Report results with screenshot back on messaging channel
 
 **Intent: Essay Help**
-Keywords: essay, brainstorm, write, prompt, draft, PIQ, personal statement
+Keywords: essay, brainstorm, write, prompt, draft, PIQ, personal statement, essay prompts, supplemental, what essays
 → Follow "Essay Brainstorming" workflow below
+→ Use `GET /agent/essay-prompts/{unitid}` to pull actual prompts for a specific college
 → Use session memory to resume across conversations
 
 **Intent: College Research**
@@ -240,15 +249,22 @@ When student asks "what docs am I missing?" or "what do I need?":
 When the student asks for essay help:
 
 1. Call `GET /twin/activities` to get their real activities, awards, and experiences
-2. If the student mentions a specific college/prompt, note it for context
-3. Suggest 2-3 essay angles based on their ACTUAL activities — never generic advice:
+2. If the student mentions a specific college, call `GET /agent/essay-prompts/{unitid}` to get the actual essay prompts:
+   - If the college has structured prompts, present them: "For Stanford, you need to write: [prompt text] (word limit: 250)"
+   - If no prompts found, continue with generic brainstorming
+3. Call `GET /twin/essays?includePrompts=true` to check draft progress:
+   - Report status: "You've finished 3/5 Harvard essays. The remaining ones are: [prompt texts]"
+   - If drafts exist for similar prompts at other colleges, suggest adaptation: "Your Brown community essay could be adapted for Michigan's similar prompt"
+4. Suggest 2-3 essay angles based on their ACTUAL activities — never generic advice:
    - Pull specific activity names, roles, and descriptions from the Twin data
    - Frame each angle as: [Activity] → [Theme] → [Why it works for this prompt]
-4. When the student picks an angle, provide:
+5. When the student picks an angle, provide:
    - A 4-point essay structure (opening hook, challenge, action, reflection)
    - A draft opening paragraph (~100 words)
-5. After drafting, hand off to CI website: "Continue writing in your CI essay editor: collegeinsight.ai/essays"
-6. **Session memory**: This conversation persists across sessions on the same channel. The student can come back and say "continue the MIT essay we discussed" and you should pick up where you left off.
+6. After drafting, hand off to CI website: "Continue writing in your CI essay editor: collegeinsight.ai/essays"
+7. **Session memory**: This conversation persists across sessions on the same channel. The student can come back and say "continue the MIT essay we discussed" and you should pick up where you left off.
+8. **Cross-college awareness**: When a student works on essays for one college, proactively check if similar prompts exist at their other colleges:
+   - "Your Brown community essay and your Michigan community essay ask similar things. Want to adapt your Brown draft?"
 
 ### College Research
 

@@ -127,16 +127,41 @@ async function fillCurrentSection() {
         twinData[
           Object.keys(twinData).find((k) => Array.isArray(twinData[k]))
         ] || [];
-      const entriesToFill = Math.min(dataArray.length, maxEntries);
 
-      for (let i = 0; i < entriesToFill; i++) {
-        const mapped = mapper.mapFieldsToValues(sectionMap, twinData, i);
-        const { filled, flagged } = fillMappedFields(mapped, simulator);
-        totalFilled += filled;
-        totalFlagged += flagged;
-        mapped
-          .filter((f) => f.flagged)
-          .forEach((f) => flaggedFields.push(f.label));
+      // For essay sections: attempt prompt-matched filling
+      if (section === "essays" || section === "writing") {
+        const promptMatched = await tryPromptMatchedEssayFill(
+          twinData,
+          simulator,
+        );
+        if (promptMatched) {
+          totalFilled += promptMatched.filled;
+          totalFlagged += promptMatched.flagged;
+          promptMatched.flaggedFields.forEach((f) => flaggedFields.push(f));
+        } else {
+          // Fallback to positional filling
+          const entriesToFill = Math.min(dataArray.length, maxEntries);
+          for (let i = 0; i < entriesToFill; i++) {
+            const mapped = mapper.mapFieldsToValues(sectionMap, twinData, i);
+            const { filled, flagged } = fillMappedFields(mapped, simulator);
+            totalFilled += filled;
+            totalFlagged += flagged;
+            mapped
+              .filter((f) => f.flagged)
+              .forEach((f) => flaggedFields.push(f.label));
+          }
+        }
+      } else {
+        const entriesToFill = Math.min(dataArray.length, maxEntries);
+        for (let i = 0; i < entriesToFill; i++) {
+          const mapped = mapper.mapFieldsToValues(sectionMap, twinData, i);
+          const { filled, flagged } = fillMappedFields(mapped, simulator);
+          totalFilled += filled;
+          totalFlagged += flagged;
+          mapped
+            .filter((f) => f.flagged)
+            .forEach((f) => flaggedFields.push(f.label));
+        }
       }
     } else {
       // Non-repeating section — fill once
@@ -737,3 +762,191 @@ chrome.storage.local.get(["ciFillAll"], (data) => {
 // Expose for direct invocation
 window.__ciFill = fillCurrentSection;
 window.__ciFillAll = fillAllSections;
+
+/**
+ * Prompt-matched essay filling.
+ * Scans the page for text areas with visible prompt labels,
+ * matches them against stored essay drafts by prompt text similarity,
+ * and fills the correct draft into the correct text box.
+ *
+ * @returns {{ filled, flagged, flaggedFields }|null} — null if matching not possible
+ */
+async function tryPromptMatchedEssayFill(twinData, simulator) {
+  // Find all text areas on the page (essay inputs)
+  const textAreas = document.querySelectorAll(
+    'textarea, [contenteditable="true"], [role="textbox"]',
+  );
+  if (textAreas.length === 0) return null;
+
+  // Get the essays from twin data
+  const essays = twinData?.essays || twinData?.Essays || [];
+  if (!Array.isArray(essays) || essays.length === 0) return null;
+
+  // Extract visible prompt text near each text area
+  const pagePrompts = [];
+  for (const ta of textAreas) {
+    const promptText = extractNearbyPromptText(ta);
+    if (promptText) {
+      pagePrompts.push({ element: ta, promptText });
+    }
+  }
+  if (pagePrompts.length === 0) return null;
+
+  // Build a map of essay drafts keyed by prompt text
+  const draftsByPrompt = [];
+  for (const essay of essays) {
+    if (essay.promptText && essay.content?.trim()) {
+      draftsByPrompt.push({
+        promptText: essay.promptText,
+        content: essay.content,
+      });
+    }
+  }
+  if (draftsByPrompt.length === 0) return null;
+
+  let filled = 0;
+  let flagged = 0;
+  const flaggedFields = [];
+
+  for (const pp of pagePrompts) {
+    // Find best-matching draft by prompt similarity
+    let bestMatch = null;
+    let bestScore = 0;
+
+    for (const draft of draftsByPrompt) {
+      const score = promptSimilarity(pp.promptText, draft.promptText);
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = draft;
+      }
+    }
+
+    if (bestMatch && bestScore > 0.3) {
+      // Fill the text area with the matched draft
+      try {
+        simulator.simulateTyping(pp.element, bestMatch.content);
+        filled++;
+      } catch {
+        flagged++;
+        flaggedFields.push(pp.promptText.slice(0, 60));
+      }
+    } else {
+      flagged++;
+      flaggedFields.push(pp.promptText.slice(0, 60));
+    }
+  }
+
+  window.__ciTelemetry?.trackEvent("agent.essay.prompt_matched", {
+    totalPrompts: pagePrompts.length,
+    filled,
+    flagged,
+  });
+
+  return { filled, flagged, flaggedFields };
+}
+
+/**
+ * Extract visible prompt/label text near a textarea element.
+ * Looks for preceding label, heading, or paragraph containing prompt text.
+ */
+function extractNearbyPromptText(element) {
+  // Check aria-label
+  const ariaLabel = element.getAttribute("aria-label");
+  if (ariaLabel && ariaLabel.length > 10) return ariaLabel;
+
+  // Check preceding sibling or parent's children for labels
+  const parent =
+    element.closest(
+      ".form-group, .field-container, .question, [class*='essay'], [class*='prompt']",
+    ) || element.parentElement;
+  if (parent) {
+    const labels = parent.querySelectorAll(
+      "label, h3, h4, p, .prompt-text, .question-text",
+    );
+    for (const label of labels) {
+      const text = label.textContent?.trim();
+      if (text && text.length > 15 && text.length < 2000) return text;
+    }
+  }
+
+  // Check explicit <label> association
+  const id = element.id;
+  if (id) {
+    const label = document.querySelector(`label[for="${CSS.escape(id)}"]`);
+    if (label?.textContent?.trim()?.length > 10)
+      return label.textContent.trim();
+  }
+
+  return null;
+}
+
+/**
+ * Compute similarity between two prompt texts (0-1).
+ * Uses normalized keyword overlap.
+ */
+function promptSimilarity(textA, textB) {
+  if (!textA || !textB) return 0;
+  const stopWords = new Set([
+    "the",
+    "a",
+    "an",
+    "and",
+    "or",
+    "but",
+    "in",
+    "on",
+    "at",
+    "to",
+    "for",
+    "of",
+    "with",
+    "by",
+    "from",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "has",
+    "have",
+    "had",
+    "do",
+    "does",
+    "did",
+    "will",
+    "would",
+    "could",
+    "should",
+    "may",
+    "might",
+    "shall",
+    "can",
+    "not",
+    "this",
+    "that",
+    "you",
+    "your",
+    "we",
+    "our",
+    "they",
+    "their",
+    "what",
+    "which",
+    "who",
+  ]);
+  const tokenize = (text) =>
+    new Set(
+      text
+        .toLowerCase()
+        .replace(/[^a-z\s]/g, "")
+        .split(/\s+/)
+        .filter((w) => w.length > 2 && !stopWords.has(w)),
+    );
+  const setA = tokenize(textA);
+  const setB = tokenize(textB);
+  if (setA.size === 0 || setB.size === 0) return 0;
+  const intersection = [...setA].filter((w) => setB.has(w)).length;
+  const union = new Set([...setA, ...setB]).size;
+  return union > 0 ? intersection / union : 0;
+}

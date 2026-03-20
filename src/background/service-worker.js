@@ -110,10 +110,14 @@ async function ciApiFetch(path, options = {}) {
 
   if (!resp.ok) {
     // Normalize error codes — never expose raw HTTP status to content scripts
-    const errorType = resp.status === 401 ? "auth_required"
-      : resp.status === 429 ? "rate_limited"
-      : resp.status >= 500 ? "service_error"
-      : "request_error";
+    const errorType =
+      resp.status === 401
+        ? "auth_required"
+        : resp.status === 429
+          ? "rate_limited"
+          : resp.status >= 500
+            ? "service_error"
+            : "request_error";
     swTrackEvent("agent.api.error", { path, status: String(resp.status) });
     throw new Error(`ci_error:${errorType}`);
   }
@@ -145,6 +149,31 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       (err) => {
         swTrackEvent("agent.api.error", {
           endpoint: "twin",
+          error: err.message,
+        });
+        sendResponse({ success: false, error: err.message });
+      },
+    );
+    return true;
+  }
+
+  if (message.type === "CI_FETCH_ESSAY_PROMPTS") {
+    const unitid = message.unitid;
+    const cacheKey = `essayPrompts:${unitid}`;
+    const cached = getCached(cacheKey);
+    if (cached) {
+      sendResponse({ success: true, data: cached, cached: true });
+      return true;
+    }
+    ciApiFetch(`agent/essay-prompts/${unitid}`).then(
+      (data) => {
+        setCache(cacheKey, data);
+        sendResponse({ success: true, data });
+      },
+      (err) => {
+        swTrackEvent("agent.api.error", {
+          endpoint: "essay-prompts",
+          unitid,
           error: err.message,
         });
         sendResponse({ success: false, error: err.message });
