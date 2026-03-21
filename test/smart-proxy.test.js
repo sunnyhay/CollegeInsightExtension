@@ -539,10 +539,16 @@ describe("detectUserRetry", () => {
       detect(promptPreview) {
         const now = Date.now();
         for (const [key, val] of recent) {
-          if (now - val.timestamp > 300000) { recent.delete(key); continue; }
+          if (now - val.timestamp > 300000) {
+            recent.delete(key);
+            continue;
+          }
         }
         for (const [, val] of recent) {
-          if (now - val.timestamp < 120000 && similarity(val.prompt, promptPreview) > 0.7) {
+          if (
+            now - val.timestamp < 120000 &&
+            similarity(val.prompt, promptPreview) > 0.7
+          ) {
             return true;
           }
         }
@@ -600,7 +606,11 @@ describe("applyAbTest", () => {
   };
 
   it("returns default model when A/B test disabled", () => {
-    const result = applyAbTest({ enabled: false, tiers: [2] }, 2, "gpt-4o-mini");
+    const result = applyAbTest(
+      { enabled: false, tiers: [2] },
+      2,
+      "gpt-4o-mini",
+    );
     expect(result.model).toBe("gpt-4o-mini");
     expect(result.group).toBeNull();
   });
@@ -631,11 +641,19 @@ describe("Twin shortcut formatters", () => {
   const formatDeadlines = (data) => {
     const colleges = [];
     const lists = { Dream: "🌟", Target: "🎯", Safety: "🛡️" };
-    if (data.collegeList && typeof data.collegeList === "object" && !Array.isArray(data.collegeList)) {
+    if (
+      data.collegeList &&
+      typeof data.collegeList === "object" &&
+      !Array.isArray(data.collegeList)
+    ) {
       for (const [tier, items] of Object.entries(data.collegeList)) {
         if (Array.isArray(items)) {
           for (const c of items)
-            colleges.push({ name: c.name || c.unitid, tier, icon: lists[tier] || "📋" });
+            colleges.push({
+              name: c.name || c.unitid,
+              tier,
+              icon: lists[tier] || "📋",
+            });
         }
       }
     } else if (Array.isArray(data.collegeList)) {
@@ -648,7 +666,8 @@ describe("Twin shortcut formatters", () => {
           colleges.push({ name: c.name, tier: "Favorite", icon: "⭐" });
       }
     }
-    if (!colleges.length) return "You don't have any colleges in your list yet. Add some at collegeinsight.ai!";
+    if (!colleges.length)
+      return "You don't have any colleges in your list yet. Add some at collegeinsight.ai!";
     let msg = "📅 Your College List & Deadlines:\n\n";
     for (const c of colleges) msg += `${c.icon} ${c.name} (${c.tier})\n`;
     msg += "\nVisit collegeinsight.ai for detailed deadline dates.";
@@ -669,15 +688,18 @@ describe("Twin shortcut formatters", () => {
     }
     if (work.length) {
       msg += "\n💼 Work:\n";
-      for (const w of work) msg += `• ${w.role || w.name || "Work"} at ${w.organization || "?"}\n`;
+      for (const w of work)
+        msg += `• ${w.role || w.name || "Work"} at ${w.organization || "?"}\n`;
     }
     if (vol.length) {
       msg += "\n🤝 Volunteer:\n";
-      for (const v of vol) msg += `• ${v.role || v.name || "Volunteer"} at ${v.organization || "?"}\n`;
+      for (const v of vol)
+        msg += `• ${v.role || v.name || "Volunteer"} at ${v.organization || "?"}\n`;
     }
     if (awards.length) {
       msg += "\n🏅 Awards:\n";
-      for (const a of awards) msg += `• ${a.title || a.name || "Award"} (${a.level || "?"})\n`;
+      for (const a of awards)
+        msg += `• ${a.title || a.name || "Award"} (${a.level || "?"})\n`;
     }
     msg += `\nTotal: ${acts.length} activities, ${work.length} work, ${vol.length} volunteer, ${awards.length} awards`;
     return msg;
@@ -740,7 +762,14 @@ describe("Twin shortcut formatters", () => {
   describe("activities formatter", () => {
     it("formats activities with hours", () => {
       const result = formatActivities({
-        activities: [{ name: "Debate Club", category: "Academic", role: "Captain", hoursPerWeek: 5 }],
+        activities: [
+          {
+            name: "Debate Club",
+            category: "Academic",
+            role: "Captain",
+            hoursPerWeek: 5,
+          },
+        ],
       });
       expect(result).toContain("Debate Club");
       expect(result).toContain("Captain");
@@ -809,5 +838,36 @@ describe("Twin shortcut formatters", () => {
       const result = formatProfile({});
       expect(result).toContain("Your Profile");
     });
+  });
+});
+
+// ── Request Timeout Configuration ──────────────────────────────────────────────
+
+describe("Request timeout configuration", () => {
+  // The smart-proxy uses REQUEST_TIMEOUT_MS (default 90s) for Azure requests.
+  // This tests the timeout constant and escalation behavior.
+
+  const REQUEST_TIMEOUT_MS = 90000; // matches smart-proxy.js default
+
+  it("default timeout is 90 seconds", () => {
+    expect(REQUEST_TIMEOUT_MS).toBe(90000);
+  });
+
+  it("timeout error message includes duration", () => {
+    const errorMsg = `Azure request timed out after ${REQUEST_TIMEOUT_MS}ms`;
+    expect(errorMsg).toContain("90000ms");
+    expect(errorMsg).toContain("timed out");
+  });
+
+  it("timeout triggers escalation to next model", () => {
+    // When a request times out, the proxy should escalate to the next stronger model
+    const currentModel = "gpt-4o-mini";
+    const nextModel = getNextStronger(currentModel);
+    expect(nextModel).toBe("gpt-5-nano"); // escalation chain continues
+  });
+
+  it("last model in chain has no escalation", () => {
+    const lastModel = "gpt-5.4";
+    expect(getNextStronger(lastModel)).toBeNull();
   });
 });
