@@ -134,6 +134,29 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true; // async response
   }
 
+  if (message.type === "CI_GET_MEMBER_STATUS") {
+    const cacheKey = "memberStatus";
+    const cached = getCached(cacheKey);
+    if (cached) {
+      sendResponse({ success: true, ...cached, cached: true });
+      return true;
+    }
+    ciApiFetch("user/memberStatus")
+      .then((data) => {
+        const result = {
+          isPremium: data?.member > 0,
+          member: data?.member || 0,
+        };
+        setCache(cacheKey, result, 5 * 60 * 1000); // 5-min cache
+        sendResponse({ success: true, ...result });
+      })
+      .catch((err) => {
+        swTrackEvent("agent.member_check.error", { error: err.message });
+        sendResponse({ success: false, isPremium: false, error: err.message });
+      });
+    return true;
+  }
+
   if (message.type === "CI_FETCH_TWIN") {
     const cacheKey = `twin:${message.endpoint}`;
     const cached = getCached(cacheKey);

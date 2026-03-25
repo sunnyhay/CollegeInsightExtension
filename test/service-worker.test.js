@@ -232,3 +232,31 @@ describe("CI API endpoint construction", () => {
     expect(url).toContain("some%20portal%2Fname");
   });
 });
+
+// ── CI_GET_MEMBER_STATUS Message Handler ──────────────────────────────────
+
+describe("CI_GET_MEMBER_STATUS handler", () => {
+  it("should route to user/memberStatus API endpoint", () => {
+    const url = `${CI_API_BASE}/user/memberStatus`;
+    expect(url).toBe("https://api.collegeinsight.ai/user/memberStatus");
+  });
+
+  it("should derive isPremium from member field", () => {
+    // Mirrors the logic in service-worker.js CI_GET_MEMBER_STATUS handler
+    const derivePremium = (data) => ({
+      isPremium: data?.member > 0,
+      member: data?.member || 0,
+    });
+
+    expect(derivePremium({ member: 1 })).toEqual({
+      isPremium: true,
+      member: 1,
+    });
+    expect(derivePremium({ member: 0 })).toEqual({
+      isPremium: false,
+      member: 0,
+    });
+    expect(derivePremium(null)).toEqual({ isPremium: false, member: 0 });
+    expect(derivePremium(undefined)).toEqual({ isPremium: false, member: 0 });
+  });
+});

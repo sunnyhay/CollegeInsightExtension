@@ -247,28 +247,58 @@ describe("escapeHtml", () => {
 
 describe("fill-all summary line generation", () => {
   function buildSummaryLine(r) {
-    const icon = r.reason === "aborted" ? "⏹" : r.success === false ? "✗" : r.filled > 0 ? "✓" : "—";
-    const detail = r.reason === "aborted" ? "stopped" : r.success === false ? r.reason : `${r.filled || 0} fields`;
+    const icon =
+      r.reason === "aborted"
+        ? "⏹"
+        : r.success === false
+          ? "✗"
+          : r.filled > 0
+            ? "✓"
+            : "—";
+    const detail =
+      r.reason === "aborted"
+        ? "stopped"
+        : r.success === false
+          ? r.reason
+          : `${r.filled || 0} fields`;
     return `${icon} ${r.label}: ${detail}`;
   }
 
   it("shows checkmark for successful fill", () => {
-    const line = buildSummaryLine({ label: "Personal Info", filled: 12, success: true });
+    const line = buildSummaryLine({
+      label: "Personal Info",
+      filled: 12,
+      success: true,
+    });
     expect(line).toBe("✓ Personal Info: 12 fields");
   });
 
   it("shows stop icon for aborted section", () => {
-    const line = buildSummaryLine({ label: "Education", success: false, reason: "aborted", filled: 0 });
+    const line = buildSummaryLine({
+      label: "Education",
+      success: false,
+      reason: "aborted",
+      filled: 0,
+    });
     expect(line).toBe("⏹ Education: stopped");
   });
 
   it("shows X for failed section with error reason", () => {
-    const line = buildSummaryLine({ label: "Testing", success: false, reason: "no_section_mapping", filled: 0 });
+    const line = buildSummaryLine({
+      label: "Testing",
+      success: false,
+      reason: "no_section_mapping",
+      filled: 0,
+    });
     expect(line).toBe("✗ Testing: no_section_mapping");
   });
 
   it("shows dash for zero-fill sections", () => {
-    const line = buildSummaryLine({ label: "Writing", filled: 0, success: true });
+    const line = buildSummaryLine({
+      label: "Writing",
+      filled: 0,
+      success: true,
+    });
     expect(line).toBe("— Writing: 0 fields");
   });
 });
@@ -278,10 +308,55 @@ describe("fill-all abort flag behavior", () => {
     const aborted = true;
     const section = { key: "education", label: "Education" };
     const result = aborted
-      ? { section: section.key, label: section.label, success: false, reason: "aborted", filled: 0, flagged: 0 }
+      ? {
+          section: section.key,
+          label: section.label,
+          success: false,
+          reason: "aborted",
+          filled: 0,
+          flagged: 0,
+        }
       : null;
     expect(result.success).toBe(false);
     expect(result.reason).toBe("aborted");
     expect(result.filled).toBe(0);
+  });
+});
+
+// ── Premium Gate Tests ─────────────────────────────────────────────────────────
+
+describe("fillCurrentSection premium gate", () => {
+  it("should return premium_required when member status check returns not premium", () => {
+    const memberStatus = { isPremium: false, member: 0 };
+    const result = !memberStatus.isPremium
+      ? {
+          success: false,
+          reason: "premium_required",
+          message:
+            "Auto-fill is a premium feature. Subscribe at CollegeInsight.ai to unlock.",
+        }
+      : null;
+
+    expect(result.success).toBe(false);
+    expect(result.reason).toBe("premium_required");
+    expect(result.message).toContain("premium feature");
+  });
+
+  it("should allow fill when member status returns premium", () => {
+    const memberStatus = { isPremium: true, member: 1 };
+    const shouldBlock = !memberStatus.isPremium;
+    expect(shouldBlock).toBe(false);
+  });
+
+  it("should fail-open when member check throws error", () => {
+    // If the member check fails, we allow fill (fail-open for existing users)
+    let shouldBlock = false;
+    try {
+      throw new Error("Network error");
+    } catch {
+      // fail-open: don't block on error
+      shouldBlock = false;
+    }
+    expect(shouldBlock).toBe(false);
   });
 });

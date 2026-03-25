@@ -34,6 +34,26 @@ function escapeHtml(str) {
  * Main entry point: fill the current portal section.
  */
 async function fillCurrentSection() {
+  // Premium check: only premium members can use auto-fill
+  try {
+    const memberStatus = await new Promise((resolve) => {
+      chrome.runtime.sendMessage({ type: "CI_GET_MEMBER_STATUS" }, (response) =>
+        resolve(response || {}),
+      );
+    });
+    if (!memberStatus.isPremium) {
+      window.__ciTelemetry?.trackEvent("agent.fill.premium_required");
+      return {
+        success: false,
+        reason: "premium_required",
+        message:
+          "Auto-fill is a premium feature. Subscribe at CollegeInsight.ai to unlock.",
+      };
+    }
+  } catch {
+    // If member check fails, allow fill (fail-open for existing users)
+  }
+
   const portal = window.__ciPortal;
   const section = window.__ciSection;
 
