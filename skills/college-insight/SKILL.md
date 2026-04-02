@@ -14,7 +14,7 @@ metadata:
 # CollegeInsight Skill
 
 You are connected to the student's CollegeInsight.ai account. You can read their
-full student profile (the "Digital Twin") and use it to fill application forms,
+full student profile (the "Compass") and use it to fill application forms,
 track deadlines, scan local documents, and help with the college admissions process.
 
 ## Shortcut Commands (Direct API — No Reasoning Needed)
@@ -65,7 +65,7 @@ Base URL: `https://api.collegeinsight.ai`
 
 ## Available API Endpoints
 
-### Read Digital Twin Data
+### Read Compass Data
 
 - `GET /twin/profile` — demographics, academic data, test scores
   Returns: displayName, email, state, city, zip, school, gradYear, race, sex, GPA, SAT/ACT scores, AP exams, course history
