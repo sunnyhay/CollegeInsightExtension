@@ -42,12 +42,12 @@ chrome.storage.local.get(["ciApiBase"], (data) => {
 });
 
 // -- Session Cache --
-// Caches Twin API responses per session to avoid redundant calls.
-// Twin data (profile, activities) reused across Fill All sections.
+// Caches Compass API responses per session to avoid redundant calls.
+// Compass data (profile, activities) reused across Fill All sections.
 // Portal maps cached for 7 days in chrome.storage.local.
 
 const sessionCache = new Map(); // key → { data, timestamp }
-const SESSION_CACHE_TTL = 300000; // 5 minutes for Twin data
+const SESSION_CACHE_TTL = 300000; // 5 minutes for Compass data
 const PORTAL_MAP_TTL = 604800000; // 7 days for portal maps
 
 function getCached(key) {
@@ -157,21 +157,21 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
-  if (message.type === "CI_FETCH_TWIN") {
-    const cacheKey = `twin:${message.endpoint}`;
+  if (message.type === "CI_FETCH_COMPASS") {
+    const cacheKey = `compass:${message.endpoint}`;
     const cached = getCached(cacheKey);
     if (cached) {
       sendResponse({ success: true, data: cached, cached: true });
       return true;
     }
-    ciApiFetch(`twin/${message.endpoint}`).then(
+    ciApiFetch(`compass/${message.endpoint}`).then(
       (data) => {
         setCache(cacheKey, data);
         sendResponse({ success: true, data });
       },
       (err) => {
         swTrackEvent("agent.api.error", {
-          endpoint: "twin",
+          endpoint: "compass",
           error: err.message,
         });
         sendResponse({ success: false, error: err.message });
@@ -237,7 +237,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.type === "CI_POST_STATUS") {
-    ciApiFetch("twin/status", {
+    ciApiFetch("compass/status", {
       method: "POST",
       body: JSON.stringify(message.payload),
     }).then(

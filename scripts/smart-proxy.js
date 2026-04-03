@@ -307,7 +307,7 @@ const TWIN_SHORTCUTS = {
   deadlines: {
     pattern:
       /^(my |check |show |what are )?(the )?(deadlines?|what.?s due|upcoming)\??$/i,
-    endpoint: "/twin/colleges",
+    endpoint: "/compass/colleges",
     format: (data) => {
       const colleges = [];
       const lists = { Dream: "🌟", Target: "🎯", Safety: "🛡️" };
@@ -349,7 +349,7 @@ const TWIN_SHORTCUTS = {
   activities: {
     pattern:
       /^(my |show |list |check |what are )?(the )?(activit\w*|ecs?|extracurriculars?)\??$/i,
-    endpoint: "/twin/activities",
+    endpoint: "/compass/activities",
     format: (data) => {
       const acts = data.activities || [];
       const work = data.workExperiences || [];
@@ -384,7 +384,7 @@ const TWIN_SHORTCUTS = {
   profile: {
     pattern:
       /^(my |show |check |what is )?(the )?(profile|info|gpa|sat|act)\??$/i,
-    endpoint: "/twin/profile",
+    endpoint: "/compass/profile",
     format: (data) => {
       let msg = "📋 Your Profile:\n\n";
       if (data.displayName) msg += `Name: ${data.displayName}\n`;
@@ -700,11 +700,11 @@ function makeAzureRequest(targetUrl, method, headers, body) {
 // ── Main Server ──
 
 const server = http.createServer((req, res) => {
-  // ── Twin API Passthrough: proxy /twin/* and /agent/* to backend over HTTPS ──
+  // ── Compass API Passthrough: proxy /compass/* and /agent/* to backend over HTTPS ──
   // This allows OpenClaw's web_fetch to reach the backend via HTTP (no cert issues)
   if (
     CI_BACKEND_URL &&
-    (req.url.startsWith("/twin/") || req.url.startsWith("/agent/"))
+    (req.url.startsWith("/compass/") || req.url.startsWith("/agent/"))
   ) {
     const backendUrl = new URL(req.url, CI_BACKEND_URL);
     const chunks = [];

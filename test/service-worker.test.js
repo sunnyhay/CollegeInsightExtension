@@ -149,7 +149,7 @@ describe("Message handler routing", () => {
   function routeMessage(message) {
     const validTypes = [
       "CI_GET_STATUS",
-      "CI_FETCH_TWIN",
+      "CI_FETCH_COMPASS",
       "CI_FETCH_PORTAL_MAP",
       "CI_POST_STATUS",
       "CI_AI_MAP",
@@ -163,9 +163,9 @@ describe("Message handler routing", () => {
     expect(routeMessage({ type: "CI_GET_STATUS" })).toBe("CI_GET_STATUS");
   });
 
-  it("routes CI_FETCH_TWIN", () => {
-    expect(routeMessage({ type: "CI_FETCH_TWIN", endpoint: "profile" })).toBe(
-      "CI_FETCH_TWIN",
+  it("routes CI_FETCH_COMPASS", () => {
+    expect(routeMessage({ type: "CI_FETCH_COMPASS", endpoint: "profile" })).toBe(
+      "CI_FETCH_COMPASS",
     );
   });
 
@@ -207,14 +207,14 @@ describe("Message handler routing", () => {
 
 describe("CI API endpoint construction", () => {
   it("builds twin profile URL correctly", () => {
-    expect(`${CI_API_BASE}/twin/profile`).toBe(
-      "https://api.collegeinsight.ai/twin/profile",
+    expect(`${CI_API_BASE}/compass/profile`).toBe(
+      "https://api.collegeinsight.ai/compass/profile",
     );
   });
 
   it("builds twin activities URL correctly", () => {
-    expect(`${CI_API_BASE}/twin/activities`).toBe(
-      "https://api.collegeinsight.ai/twin/activities",
+    expect(`${CI_API_BASE}/compass/activities`).toBe(
+      "https://api.collegeinsight.ai/compass/activities",
     );
   });
 

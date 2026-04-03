@@ -1,6 +1,6 @@
 /**
  * form-filler.js — Core form-filling engine.
- * Loads Twin data + field mapping, fills DOM fields, shows preview overlay.
+ * Loads Compass data + field mapping, fills DOM fields, shows preview overlay.
  *
  * Dependencies (loaded as content scripts before this file):
  * - window.__ciPortal / window.__ciSection (from portal-detector.js)
@@ -10,7 +10,7 @@
  * CI API calls go through the service worker via chrome.runtime.sendMessage.
  */
 
-const TWIN_ENDPOINT_MAP = {
+const COMPASS_ENDPOINT_MAP = {
   profile: "profile",
   education: "profile",
   testing: "profile",
@@ -109,28 +109,28 @@ async function fillCurrentSection() {
       return { success: false, reason: "no_section_mapping" };
     }
 
-    // 2. Fetch Twin data
-    const twinEndpoint =
-      sectionMap.twinEndpoint?.replace("/twin/", "") ||
-      TWIN_ENDPOINT_MAP[section] ||
+    // 2. Fetch Compass data
+    const compassEndpoint =
+      sectionMap.compassEndpoint?.replace("/compass/", "") ||
+      COMPASS_ENDPOINT_MAP[section] ||
       "profile";
-    let twinData;
+    let compassData;
     try {
-      twinData = await fetchFromBackground("CI_FETCH_TWIN", {
-        endpoint: twinEndpoint,
+      compassData = await fetchFromBackground("CI_FETCH_COMPASS", {
+        endpoint: compassEndpoint,
       });
-    } catch (twinErr) {
-      window.__ciTelemetry?.trackEvent("agent.twin.error", {
+    } catch (compassErr) {
+      window.__ciTelemetry?.trackEvent("agent.compass.error", {
         portal,
         section,
-        error: twinErr?.message,
+        error: compassErr?.message,
       });
       showFillError(
         portal,
         section,
         "We couldn't load your data right now. Please try again in a moment.",
       );
-      return { success: false, reason: "twin_fetch_failed" };
+      return { success: false, reason: "compass_fetch_failed" };
     }
 
     // 3. Map fields to values
@@ -144,14 +144,14 @@ async function fillCurrentSection() {
       // Repeating section (activities, essays) — fill multiple entries
       const maxEntries = sectionMap.maxEntries || 10;
       const dataArray =
-        twinData[
-          Object.keys(twinData).find((k) => Array.isArray(twinData[k]))
+        compassData[
+          Object.keys(compassData).find((k) => Array.isArray(compassData[k]))
         ] || [];
 
       // For essay sections: attempt prompt-matched filling
       if (section === "essays" || section === "writing") {
         const promptMatched = await tryPromptMatchedEssayFill(
-          twinData,
+          compassData,
           simulator,
         );
         if (promptMatched) {
@@ -162,7 +162,7 @@ async function fillCurrentSection() {
           // Fallback to positional filling
           const entriesToFill = Math.min(dataArray.length, maxEntries);
           for (let i = 0; i < entriesToFill; i++) {
-            const mapped = mapper.mapFieldsToValues(sectionMap, twinData, i);
+            const mapped = mapper.mapFieldsToValues(sectionMap, compassData, i);
             const { filled, flagged } = fillMappedFields(mapped, simulator);
             totalFilled += filled;
             totalFlagged += flagged;
@@ -174,7 +174,7 @@ async function fillCurrentSection() {
       } else {
         const entriesToFill = Math.min(dataArray.length, maxEntries);
         for (let i = 0; i < entriesToFill; i++) {
-          const mapped = mapper.mapFieldsToValues(sectionMap, twinData, i);
+          const mapped = mapper.mapFieldsToValues(sectionMap, compassData, i);
           const { filled, flagged } = fillMappedFields(mapped, simulator);
           totalFilled += filled;
           totalFlagged += flagged;
@@ -185,7 +185,7 @@ async function fillCurrentSection() {
       }
     } else {
       // Non-repeating section — fill once
-      const mapped = mapper.mapFieldsToValues(sectionMap, twinData);
+      const mapped = mapper.mapFieldsToValues(sectionMap, compassData);
       const { filled, flagged } = fillMappedFields(mapped, simulator);
       totalFilled = filled;
       totalFlagged = flagged;
@@ -496,31 +496,31 @@ const COMMON_APP_SECTIONS = [
     key: "profile",
     label: "Personal Info",
     urlPath: "/common/1/232",
-    twinEndpoint: "profile",
+    compassEndpoint: "profile",
   },
   {
     key: "education",
     label: "Education",
     urlPath: "/common/3/232",
-    twinEndpoint: "profile",
+    compassEndpoint: "profile",
   },
   {
     key: "testing",
     label: "Testing",
     urlPath: "/common/5/232",
-    twinEndpoint: "profile",
+    compassEndpoint: "profile",
   },
   {
     key: "activities",
     label: "Activities",
     urlPath: "/common/7/232",
-    twinEndpoint: "activities",
+    compassEndpoint: "activities",
   },
   {
     key: "essays",
     label: "Writing",
     urlPath: "/common/8/232",
-    twinEndpoint: "essays",
+    compassEndpoint: "essays",
   },
 ];
 
@@ -791,15 +791,15 @@ window.__ciFillAll = fillAllSections;
  *
  * @returns {{ filled, flagged, flaggedFields }|null} — null if matching not possible
  */
-async function tryPromptMatchedEssayFill(twinData, simulator) {
+async function tryPromptMatchedEssayFill(compassData, simulator) {
   // Find all text areas on the page (essay inputs)
   const textAreas = document.querySelectorAll(
     'textarea, [contenteditable="true"], [role="textbox"]',
   );
   if (textAreas.length === 0) return null;
 
-  // Get the essays from twin data
-  const essays = twinData?.essays || twinData?.Essays || [];
+  // Get the essays from compass data
+  const essays = compassData?.essays || compassData?.Essays || [];
   if (!Array.isArray(essays) || essays.length === 0) return null;
 
   // Extract visible prompt text near each text area

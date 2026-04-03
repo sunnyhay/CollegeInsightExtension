@@ -1,14 +1,14 @@
 /**
- * field-mapper.js — Maps Twin API data to portal form fields using portal-map definitions.
+ * field-mapper.js — Maps Compass API data to portal form fields using portal-map definitions.
  *
- * Given a portal map section and Twin data, resolves each field's twinPath to a value
+ * Given a portal map section and Compass data, resolves each field's compassPath to a value
  * and applies any twinTransform to format it for the portal.
  */
 
 /**
  * Resolve a dot-path like "demographics.displayName" or "activities[0].name"
  * against a data object.
- * @param {object} data - Twin API response data
+ * @param {object} data - Compass API response data
  * @param {string} path - Dot notation path, may include array brackets
  * @returns {*} Resolved value or undefined
  */
@@ -27,8 +27,8 @@ function resolvePath(data, path) {
 }
 
 /**
- * Apply a transform to a Twin value before filling into a portal field.
- * @param {*} value - Raw value from Twin data
+ * Apply a transform to a Compass value before filling into a portal field.
+ * @param {*} value - Raw value from Compass data
  * @param {string|null} transform - Transform name (e.g., "firstName", "truncate:150")
  * @returns {*} Transformed value
  */
@@ -79,14 +79,14 @@ function applyTransform(value, transform) {
 }
 
 /**
- * Map Twin data to portal fields for a given section.
+ * Map Compass data to portal fields for a given section.
  *
  * @param {object} sectionMap - The portal map section definition
- * @param {object} twinData - Twin API response for the relevant endpoint
+ * @param {object} compassData - Compass API response for the relevant endpoint
  * @param {number} [entryIndex] - For repeating sections, the activity/essay index
  * @returns {{ selector: string, value: *, label: string, filled: boolean, flagged: boolean, reason?: string }[]}
  */
-function mapFieldsToValues(sectionMap, twinData, entryIndex = 0) {
+function mapFieldsToValues(sectionMap, compassData, entryIndex = 0) {
   const fields = sectionMap.repeating
     ? sectionMap.entryFields
     : sectionMap.fields;
@@ -100,12 +100,12 @@ function mapFieldsToValues(sectionMap, twinData, entryIndex = 0) {
     .map((field) => {
       // Skip checkbox groups — handled separately
       if (field.type === "checkboxGroup") {
-        return mapCheckboxGroup(field, twinData, entryIndex, resolved);
+        return mapCheckboxGroup(field, compassData, entryIndex, resolved);
       }
 
-      // Resolve the twinPath (replace {i} with entryIndex)
-      const path = field.twinPath?.replace(/\{i\}/g, String(entryIndex));
-      const rawValue = resolvePath(twinData, path);
+      // Resolve the compassPath (replace {i} with entryIndex)
+      const path = field.compassPath?.replace(/\{i\}/g, String(entryIndex));
+      const rawValue = resolvePath(compassData, path);
       const value = applyTransform(rawValue, field.twinTransform);
 
       // Resolve the selector (use template if available, else static)
@@ -144,12 +144,12 @@ function mapFieldsToValues(sectionMap, twinData, entryIndex = 0) {
 /**
  * Map a checkbox group (e.g., participation grades) to individual checkbox fills.
  */
-function mapCheckboxGroup(field, twinData, entryIndex, resolved) {
-  const path = field.options?.[0]?.twinPath?.replace(
+function mapCheckboxGroup(field, compassData, entryIndex, resolved) {
+  const path = field.options?.[0]?.compassPath?.replace(
     /\{i\}/g,
     String(entryIndex),
   );
-  const twinArray = resolvePath(twinData, path);
+  const twinArray = resolvePath(compassData, path);
 
   return field.options.map((opt) => {
     // Determine if this checkbox should be checked

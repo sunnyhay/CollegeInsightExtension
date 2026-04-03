@@ -196,7 +196,7 @@ async function main() {
   console.log("\n── 1. Backend Twin API Direct ──");
 
   const twinCheck = await new Promise((resolve) => {
-    const u = new URL("/twin/colleges", BACKEND_URL);
+    const u = new URL("/compass/colleges", BACKEND_URL);
     https
       .get(
         {

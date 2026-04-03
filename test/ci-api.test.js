@@ -1,7 +1,7 @@
 /**
  * Unit Tests: ci-api.js
  *
- * Tests Chrome runtime message passing for Twin API calls.
+ * Tests Chrome runtime message passing for Compass API calls.
  * Mocks chrome.runtime.sendMessage to simulate service worker responses.
  */
 
@@ -14,17 +14,17 @@ global.chrome = {
 };
 
 // Inline the functions since ci-api.js uses IIFE/module pattern for content scripts
-function fetchTwin(endpoint) {
+function fetchCompass(endpoint) {
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(
-      { type: "CI_FETCH_TWIN", endpoint },
+      { type: "CI_FETCH_COMPASS", endpoint },
       (response) => {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message));
           return;
         }
         if (!response?.success) {
-          reject(new Error(response?.error || "Failed to fetch Twin data"));
+          reject(new Error(response?.error || "Failed to fetch Compass data"));
           return;
         }
         resolve(response.data);
@@ -76,16 +76,16 @@ beforeEach(() => {
   chrome.runtime.lastError = null;
 });
 
-// ── fetchTwin Tests ────────────────────────────────────────────────────────────
+// ── fetchCompass Tests ────────────────────────────────────────────────────────────
 
-describe("fetchTwin", () => {
+describe("fetchCompass", () => {
   it("sends correct message type and endpoint", async () => {
     chrome.runtime.sendMessage.mockImplementation((msg, cb) =>
       cb({ success: true, data: { gpa: 3.7 } }),
     );
-    await fetchTwin("profile");
+    await fetchCompass("profile");
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
-      { type: "CI_FETCH_TWIN", endpoint: "profile" },
+      { type: "CI_FETCH_COMPASS", endpoint: "profile" },
       expect.any(Function),
     );
   });
@@ -95,14 +95,14 @@ describe("fetchTwin", () => {
     chrome.runtime.sendMessage.mockImplementation((msg, cb) =>
       cb({ success: true, data: mockData }),
     );
-    const result = await fetchTwin("profile");
+    const result = await fetchCompass("profile");
     expect(result).toEqual(mockData);
   });
 
   it("rejects on chrome.runtime.lastError", async () => {
     chrome.runtime.lastError = { message: "Extension context invalidated" };
     chrome.runtime.sendMessage.mockImplementation((msg, cb) => cb(undefined));
-    await expect(fetchTwin("profile")).rejects.toThrow(
+    await expect(fetchCompass("profile")).rejects.toThrow(
       "Extension context invalidated",
     );
   });
@@ -111,19 +111,19 @@ describe("fetchTwin", () => {
     chrome.runtime.sendMessage.mockImplementation((msg, cb) =>
       cb({ success: false, error: "Not authenticated" }),
     );
-    await expect(fetchTwin("profile")).rejects.toThrow("Not authenticated");
+    await expect(fetchCompass("profile")).rejects.toThrow("Not authenticated");
   });
 
   it("rejects with default message when no error provided", async () => {
     chrome.runtime.sendMessage.mockImplementation((msg, cb) =>
       cb({ success: false }),
     );
-    await expect(fetchTwin("profile")).rejects.toThrow(
-      "Failed to fetch Twin data",
+    await expect(fetchCompass("profile")).rejects.toThrow(
+      "Failed to fetch Compass data",
     );
   });
 
-  it("works for all 5 Twin endpoints", async () => {
+  it("works for all 5 Compass endpoints", async () => {
     chrome.runtime.sendMessage.mockImplementation((msg, cb) =>
       cb({ success: true, data: {} }),
     );
@@ -134,9 +134,9 @@ describe("fetchTwin", () => {
       "financial",
       "colleges",
     ]) {
-      await fetchTwin(ep);
+      await fetchCompass(ep);
       expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
-        { type: "CI_FETCH_TWIN", endpoint: ep },
+        { type: "CI_FETCH_COMPASS", endpoint: ep },
         expect.any(Function),
       );
     }

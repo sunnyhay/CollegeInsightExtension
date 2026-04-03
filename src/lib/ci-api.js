@@ -26,19 +26,19 @@ function sendMessageWithTimeout(message, timeoutMs = 5000) {
 }
 
 /**
- * Fetch Twin data from the CI backend via the service worker.
+ * Fetch Compass data from the CI backend via the service worker.
  * Includes 1 retry with 2s delay on service errors.
  * @param {"profile"|"activities"|"essays"|"financial"|"colleges"} endpoint
- * @returns {Promise<object>} Twin data
+ * @returns {Promise<object>} Compass data
  */
-async function fetchTwin(endpoint) {
+async function fetchCompass(endpoint) {
   try {
-    return await sendMessageWithTimeout({ type: "CI_FETCH_TWIN", endpoint });
+    return await sendMessageWithTimeout({ type: "CI_FETCH_COMPASS", endpoint });
   } catch (err) {
     // Retry once on service errors (5xx), not auth or timeout
     if (err.message?.includes("service_error")) {
       await new Promise((r) => setTimeout(r, 2000));
-      return await sendMessageWithTimeout({ type: "CI_FETCH_TWIN", endpoint });
+      return await sendMessageWithTimeout({ type: "CI_FETCH_COMPASS", endpoint });
     }
     throw err;
   }
@@ -76,7 +76,7 @@ async function isAuthenticated() {
 
 // Expose to other content scripts
 window.__ciApi = {
-  fetchTwin,
+  fetchCompass,
   fetchPortalMap,
   postStatus,
   isAuthenticated,
