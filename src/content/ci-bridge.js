@@ -51,6 +51,25 @@ window.addEventListener("message", (event) => {
     });
     return;
   }
+
+  // Common App API bridge: CI web app requests an api25 operation. The SW
+  // forwards it to the apply.commonapp.org content script. Response is posted
+  // back to the page so the SPA's Promise resolves. Each request carries a
+  // requestId for correlation. See POC #5 / common-app-broker.js.
+  if (event.data?.type && event.data.type.startsWith("CI_CA_")) {
+    const { type, requestId, ...payload } = event.data;
+    chrome.runtime.sendMessage({ type, ...payload }, (response) => {
+      window.postMessage(
+        {
+          type: "CI_CA_RESPONSE",
+          requestId,
+          response: response || { success: false, error: "no_response" },
+        },
+        window.location.origin,
+      );
+    });
+    return;
+  }
 });
 
 // Periodically refresh: request a fresh token from the page every 45 min

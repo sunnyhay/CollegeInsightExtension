@@ -285,8 +285,77 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return false;
   }
 
+  // --- Common App API broker bridge ---
+  // The SPA (via ci-bridge.js) sends CI_CA_* messages here. We forward them as
+  // CA_* messages to the apply.commonapp.org content script, which actually
+  // performs the fetch (api25 enforces an Origin allowlist; the SW can't call
+  // it directly). See POC #4 in scripts/common-app/notes.md §3c.
+  if (message.type && message.type.startsWith("CI_CA_")) {
+    handleCommonAppBridge(message)
+      .then((result) => sendResponse(result))
+      .catch((err) =>
+        sendResponse({ success: false, error: String(err?.message || err) }),
+      );
+    return true; // async
+  }
+
+  // Cache the most recent Common App session capture so the popup/SPA can show
+  // "connected to Common App" status without round-tripping to the tab.
+  if (message.type === "CA_SESSION_CAPTURED") {
+    chrome.storage.local.set({
+      caSession: { ...message.meta, capturedAt: Date.now() },
+    });
+    swTrackEvent("agent.ca.capture", { username: message.meta?.username });
+    return false;
+  }
+
   return false;
 });
+
+// -- Common App bridge --
+
+const CA_TAB_URL_MATCH = "https://apply.commonapp.org/*";
+
+async function findCommonAppTab() {
+  const tabs = await chrome.tabs.query({ url: CA_TAB_URL_MATCH });
+  // Prefer the most recently active matching tab.
+  return (
+    tabs.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0))[0] ||
+    null
+  );
+}
+
+async function handleCommonAppBridge(message) {
+  const tab = await findCommonAppTab();
+  if (!tab) {
+    return {
+      success: false,
+      error: "ca_no_tab",
+      hint: "Open https://apply.commonapp.org in a tab to enable Common App fills.",
+    };
+  }
+  // Translate CI_CA_* → CA_* expected by the broker content script.
+  const caMessage = {
+    ...message,
+    type: message.type.replace(/^CI_CA_/, "CA_"),
+  };
+  swTrackEvent("agent.ca.fill", {
+    type: caMessage.type,
+    tabId: String(tab.id),
+  });
+  return new Promise((resolve) => {
+    chrome.tabs.sendMessage(tab.id, caMessage, (resp) => {
+      if (chrome.runtime.lastError) {
+        resolve({
+          success: false,
+          error: `ca_tab_unreachable:${chrome.runtime.lastError.message}`,
+        });
+        return;
+      }
+      resolve(resp || { success: false, error: "ca_no_response" });
+    });
+  });
+}
 
 // -- Fill All orchestration --
 

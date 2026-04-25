@@ -10,6 +10,8 @@
     "http://localhost:4200/*",
     "https://localhost:5001/*",
     "https://apply.commonapp.org/*",
+    "https://api25.commonapp.org/*",
+    "https://cognito-idp.us-west-2.amazonaws.com/*",
     "https://admission.universityofcalifornia.edu/*",
     "https://apply.universityofcalifornia.edu/*",
     "https://studentaid.gov/*",
@@ -46,6 +48,11 @@
         "src/content/form-filler.js",
         "src/content/status-reporter.js"
       ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://apply.commonapp.org/*"],
+      "js": ["src/content/common-app-broker.js"],
       "run_at": "document_idle"
     }
   ],
