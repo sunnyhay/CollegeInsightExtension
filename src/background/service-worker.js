@@ -64,6 +64,54 @@ function setCache(key, data) {
   sessionCache.set(key, { data, timestamp: Date.now() });
 }
 
+// -- Per-tab correlation nonce for CI_CA_* gating (Phase 1 #1.7) --
+// The Accelerator page mints a random nonce on mount and registers it via
+// CI_REGISTER_NONCE. Every subsequent CI_CA_* message (except CI_CA_PING)
+// must carry that same nonce or the SW rejects it. Stops arbitrary
+// same-origin scripts (other extensions, dev console, page-injected) from
+// invoking the Common App broker.
+const tabNonces = new Map(); // tabId → { nonce, registeredAt }
+const NONCE_TTL_MS = 8 * 60 * 60 * 1000; // 8h — covers a long fill session
+const CI_CA_AUTH_FREE = new Set(["CI_CA_PING"]);
+
+function registerNonce(tabId, nonce) {
+  if (
+    typeof tabId !== "number" ||
+    typeof nonce !== "string" ||
+    nonce.length < 16
+  ) {
+    return false;
+  }
+  tabNonces.set(tabId, { nonce, registeredAt: Date.now() });
+  return true;
+}
+
+function validateNonce(tabId, nonce) {
+  const entry = tabNonces.get(tabId);
+  if (!entry) return "no_nonce";
+  if (Date.now() - entry.registeredAt > NONCE_TTL_MS) {
+    tabNonces.delete(tabId);
+    return "no_nonce";
+  }
+  if (!nonce || nonce !== entry.nonce) return "bad_nonce";
+  return "ok";
+}
+
+// Promise-returning membership probe (reuses CI_GET_MEMBER_STATUS cache).
+async function probeMembership() {
+  const cached = getCached("memberStatus");
+  if (cached) return cached;
+  try {
+    const data = await ciApiFetch("user/memberStatus");
+    const result = { isPremium: data?.member > 0, member: data?.member || 0 };
+    setCache("memberStatus", result);
+    return result;
+  } catch (err) {
+    swTrackEvent("agent.member_check.error", { error: err.message });
+    return { isPremium: false, member: 0, error: err.message };
+  }
+}
+
 // -- Token management --
 
 async function getToken() {
@@ -126,7 +174,7 @@ async function ciApiFetch(path, options = {}) {
 
 // -- Message handler —
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "CI_GET_STATUS") {
     getToken().then((token) => {
       sendResponse({ authenticated: !!token });
@@ -285,12 +333,71 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return false;
   }
 
+  // Accelerator page registers a per-tab correlation nonce. Origin allowlist
+  // is enforced by the manifest content_scripts.matches list — only those
+  // origins can inject ci-bridge.js and reach this handler.
+  if (message.type === "CI_REGISTER_NONCE") {
+    const tabId = sender?.tab?.id;
+    const ok = registerNonce(tabId, message.nonce);
+    sendResponse({ success: ok });
+    return false;
+  }
+
+  // Telemetry forwarder — content scripts (broker, extractor) can't talk to
+  // App Insights directly without CSP juggling. They post AGENT_TELEMETRY
+  // here and we relay through swTrackEvent.
+  if (message.type === "AGENT_TELEMETRY" && typeof message.name === "string") {
+    swTrackEvent(message.name, message.props || {});
+    return false;
+  }
+
   // --- Common App API broker bridge ---
   // The SPA (via ci-bridge.js) sends CI_CA_* messages here. We forward them as
   // CA_* messages to the apply.commonapp.org content script, which actually
   // performs the fetch (api25 enforces an Origin allowlist; the SW can't call
   // it directly). See POC #4 in scripts/common-app/notes.md §3c.
+  //
+  // Phase 1 #1.7: gate every non-ping CI_CA_* message on (a) a registered
+  // per-tab nonce and (b) premium membership. Without these, a non-premium
+  // user with the extension installed could post CI_CA_SAVE_ANSWERS directly
+  // via window.postMessage and bypass the Accelerator UI gate.
   if (message.type && message.type.startsWith("CI_CA_")) {
+    if (!CI_CA_AUTH_FREE.has(message.type)) {
+      const tabId = sender?.tab?.id;
+      const nonceCheck = validateNonce(tabId, message.nonce);
+      if (nonceCheck !== "ok") {
+        swTrackEvent("agent.ca.bypass_blocked", {
+          code: nonceCheck,
+          messageType: message.type,
+        });
+        sendResponse({ success: false, code: nonceCheck, error: nonceCheck });
+        return false;
+      }
+      probeMembership().then((status) => {
+        if (!status.isPremium) {
+          swTrackEvent("agent.ca.bypass_blocked", {
+            code: "not_premium",
+            messageType: message.type,
+          });
+          sendResponse({
+            success: false,
+            code: "premium_required",
+            error: "premium_required",
+          });
+          return;
+        }
+        handleCommonAppBridge(message)
+          .then((result) => sendResponse(result))
+          .catch((err) =>
+            sendResponse({
+              success: false,
+              error: String(err?.message || err),
+            }),
+          );
+      });
+      return true; // async
+    }
+    // CI_CA_PING is allowlisted — used as a connection probe before nonce/membership are known.
     handleCommonAppBridge(message)
       .then((result) => sendResponse(result))
       .catch((err) =>
@@ -301,11 +408,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   // Cache the most recent Common App session capture so the popup/SPA can show
   // "connected to Common App" status without round-tripping to the tab.
+  // Note: the broker (common-app-broker.js) emits the canonical `agent.ca.capture`
+  // event — we don't re-emit here to avoid duplicate / mis-shaped events.
   if (message.type === "CA_SESSION_CAPTURED") {
     chrome.storage.local.set({
       caSession: { ...message.meta, capturedAt: Date.now() },
     });
-    swTrackEvent("agent.ca.capture", { username: message.meta?.username });
     return false;
   }
 
@@ -339,8 +447,11 @@ async function handleCommonAppBridge(message) {
     ...message,
     type: message.type.replace(/^CI_CA_/, "CA_"),
   };
-  swTrackEvent("agent.ca.fill", {
-    type: caMessage.type,
+  // Bridge-forward telemetry. Distinct event name from the broker's
+  // `agent.ca.fill` so the documented broker schema (op/success/durationMs)
+  // stays clean. This event records the SW → content-script hop only.
+  swTrackEvent("agent.ca.bridge_forward", {
+    messageType: caMessage.type,
     tabId: String(tab.id),
   });
   return new Promise((resolve) => {

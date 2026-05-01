@@ -22,10 +22,30 @@
   const COGNITO_CLIENT_ID = "7nlsd88gsm2rlvu45jv7g8edh8";
   const COGNITO_REGION = "us-west-2";
   const CA_API_BASE = "https://api25.commonapp.org";
-  const CA_API_KEY = "tYFvpgKw3GaxrwoztllAc2j5bekLdMF25aayCxwx";
+  // Phase 1 #1.6: dynamic key resolution. Module loaded by manifest before us.
+  const keyExtractor =
+    (typeof window !== "undefined" && window.__ciApiKeyExtractor) || null;
   const COGNITO_URL = `https://cognito-idp.${COGNITO_REGION}.amazonaws.com/`;
   const LS_PREFIX = `CognitoIdentityServiceProvider.${COGNITO_CLIENT_ID}.`;
   const ID_TOKEN_REFRESH_MARGIN_SEC = 300; // refresh if <5 min remaining
+
+  /** Lightweight telemetry forward to SW (avoids duplicating App Insights wire format). */
+  function emit(name, props) {
+    try {
+      chrome.runtime.sendMessage({ type: "AGENT_TELEMETRY", name, props });
+    } catch {
+      /* SW may be transient; drop silently */
+    }
+  }
+
+  /** Resolve current X-APi-Key. Fails closed when extractor not loaded. */
+  async function getApiKey(forceRefresh) {
+    if (!keyExtractor) {
+      // No extractor module — fail closed (Phase 1 #1.6 contract).
+      return { key: null, extractionFailed: true };
+    }
+    return keyExtractor.resolveApiKey({ forceRefresh, emit });
+  }
 
   /** Read the current Cognito session from this page's localStorage. */
   function readSessionFromLocalStorage() {
@@ -51,7 +71,10 @@
     }
   }
 
-  /** Cognito InitiateAuth + REFRESH_TOKEN_AUTH. DEVICE_KEY required by this user pool. */
+  /** Cognito InitiateAuth + REFRESH_TOKEN_AUTH. DEVICE_KEY required by this user pool.
+   *  Throws structured Error whose .message is one of:
+   *    cognito_no_id_token | token_expired | device_revoked | cognito_refresh_failed:<status>
+   */
   async function refreshIdToken({ refreshToken, deviceKey }) {
     const resp = await fetch(COGNITO_URL, {
       method: "POST",
@@ -71,17 +94,28 @@
     });
     if (!resp.ok) {
       const body = await resp.text();
-      throw new Error(
-        `cognito_refresh_failed:${resp.status}:${body.slice(0, 200)}`,
-      );
+      // Classify by Cognito message body, not exception name (Round 2 #5).
+      // Cognito does not reliably distinguish device-eviction from refresh-revocation;
+      // both surface as NotAuthorizedException + "Invalid Refresh Token". Treat as
+      // device_revoked when we have a deviceKey on file (re-capture flow needed),
+      // otherwise token_expired.
+      if (/Refresh Token has expired/i.test(body)) {
+        throw new Error("token_expired");
+      }
+      if (
+        /Invalid Refresh Token/i.test(body) ||
+        /NotAuthorizedException/i.test(body)
+      ) {
+        throw new Error(deviceKey ? "device_revoked" : "token_expired");
+      }
+      throw new Error(`cognito_refresh_failed:${resp.status}`);
     }
     const data = await resp.json();
-    const auth = data?.AuthenticationResult;
-    if (!auth?.IdToken) throw new Error("cognito_no_id_token");
+    const auth = data && data.AuthenticationResult;
+    if (!auth || !auth.IdToken) throw new Error("cognito_no_id_token");
     return {
       idToken: auth.IdToken,
       accessToken: auth.AccessToken,
-      // Refresh token is reused; AuthenticationResult.RefreshToken is usually absent.
       refreshToken: auth.RefreshToken || refreshToken,
       expiresIn: auth.ExpiresIn || 3600,
     };
@@ -111,18 +145,29 @@
     return { idToken: refreshed.idToken, refreshed: true };
   }
 
-  /** Common App API call. Must run from this origin to satisfy the api25 Origin allowlist. */
-  async function caApi(method, path, body, idToken) {
+  /** Common App API call. Must run from this origin to satisfy the api25 Origin allowlist.
+   *  On 401/403 (likely apikey_rotated), force-refresh the key and retry once. */
+  async function caApi(method, path, body, idToken, attempt) {
+    const tries = attempt || 0;
+    const { key: apiKey, extractionFailed } = await getApiKey(tries > 0);
+    if (!apiKey) {
+      // Extractor failed closed — do not attempt the API call.
+      throw new Error("apikey_extraction_failed");
+    }
     const resp = await fetch(`${CA_API_BASE}${path}`, {
       method,
       headers: {
         Authorization: idToken,
-        "X-APi-Key": CA_API_KEY,
+        "X-APi-Key": apiKey,
         ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
       credentials: "omit",
     });
+    if ((resp.status === 401 || resp.status === 403) && tries === 0) {
+      // Possible apikey rotation — retry once with forced extraction.
+      return caApi(method, path, body, idToken, tries + 1);
+    }
     const text = await resp.text();
     let parsed;
     try {
@@ -131,9 +176,14 @@
       parsed = text;
     }
     if (!resp.ok) {
-      throw new Error(
-        `ca_api_error:${resp.status}:${typeof parsed === "string" ? parsed : JSON.stringify(parsed)}`,
-      );
+      // After one retry, treat persistent 401/403 as apikey_rotated unless
+      // extraction itself failed (in which case fail-closed signals to broker).
+      if (resp.status === 401 || resp.status === 403) {
+        throw new Error(
+          extractionFailed ? "apikey_extraction_failed" : "apikey_rotated",
+        );
+      }
+      throw new Error(`ca_api_error:${resp.status}`);
     }
     return parsed;
   }
@@ -178,7 +228,19 @@
 
   function captureAndReportSession() {
     const session = readSessionFromLocalStorage();
-    if (!session) return;
+    if (!session) {
+      emit("agent.ca.capture", {
+        success: false,
+        errorCode: "ca_not_signed_in",
+      });
+      return;
+    }
+    emit("agent.ca.capture", {
+      success: true,
+      hasRefreshToken: !!session.refreshToken,
+      hasDeviceKey: !!session.deviceKey,
+      idTokenExp: jwtPayload(session.idToken)?.exp || null,
+    });
     chrome.runtime.sendMessage({
       type: "CA_SESSION_CAPTURED",
       // Don't ship tokens to SW long-term — only the metadata it needs to know we're connected.
@@ -195,13 +257,67 @@
 
   // --- Message handler from service worker ---
 
+  // Map CA_* message types → agent.ca.fill `op` property values for telemetry
+  // parity with agent.fill.* events. Keeps event shape A/B-comparable.
+  const FILL_OP_MAP = {
+    CA_LIST_COLLEGES: "list_colleges",
+    CA_ADD_COLLEGES: "add_colleges",
+    CA_REMOVE_COLLEGE: "remove_college",
+    CA_SAVE_ANSWERS: "save_answers",
+    CA_PING: "ping",
+  };
+
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message || typeof message.type !== "string") return;
     if (!message.type.startsWith("CA_")) return;
 
+    const startedAt = Date.now();
+    const op = FILL_OP_MAP[message.type] || "unknown";
+    // For save_answers, surface the answer count so we can correlate with /fill/plan.
+    const opMeta =
+      message.type === "CA_SAVE_ANSWERS"
+        ? {
+            answerCount: Array.isArray(message.answers)
+              ? message.answers.length
+              : 0,
+          }
+        : message.type === "CA_ADD_COLLEGES"
+          ? {
+              memberIdCount: Array.isArray(message.memberIds)
+                ? message.memberIds.length
+                : 0,
+            }
+          : {};
+
+    // Phase 8 follow-up — A/B parity dimensions.
+    //
+    // Legacy `agent.fill.completed` carries `{ portal, section, filledCount,
+    // flaggedCount }`. The Common App save_answers path now mirrors that
+    // shape so dashboards can join DOM-vs-API performance per section.
+    // The Accelerator's `fillExecuteService.executeGroup` threads `section`
+    // and `collegeUnitid` into the CI_CA_SAVE_ANSWERS envelope; ci-bridge
+    // and the service worker pass them through unchanged.
+    //
+    // Phase 4 #21 — `phase: "visible"|"conditional"` lets the broker mute
+    // its `flaggedCount` for conditional follow-up batches: api25's
+    // invalidAnswers list there means "question wasn't actually triggered
+    // for this user", not a fill failure. We surface those as
+    // `skippedCount` instead so the failure-rate signal stays clean.
+    const abMeta =
+      message.type === "CA_SAVE_ANSWERS"
+        ? {
+            section: message.section ?? null,
+            collegeUnitid: message.collegeUnitid ?? null,
+            phase: message.phase ?? "visible",
+          }
+        : {};
+
     (async () => {
       try {
         const { idToken, refreshed } = await getFreshIdToken();
+        if (refreshed) {
+          emit("agent.ca.refresh", { success: true });
+        }
         let result;
         switch (message.type) {
           case "CA_LIST_COLLEGES":
@@ -220,15 +336,74 @@
             result = { connected: true, idTokenRefreshed: refreshed };
             break;
           default:
+            emit("agent.ca.error", {
+              code: "unknown_ca_message",
+              messageType: message.type,
+            });
             sendResponse({
               success: false,
               error: `unknown_ca_message:${message.type}`,
             });
             return;
         }
+        // For CA_SAVE_ANSWERS: derive `filledCount` / `flaggedCount` from
+        // the api25 response so dashboards can A/B-join against legacy
+        // `agent.fill.completed`. Other operations omit the counts (they
+        // aren't section-fills).
+        //
+        // Phase 4 #21: in the conditional follow-up phase, invalidAnswers
+        // means "question wasn't triggered for this user" — surface those
+        // as `skippedCount` instead of `flaggedCount` so dashboards don't
+        // confuse them with real save failures.
+        const successCounts =
+          message.type === "CA_SAVE_ANSWERS"
+            ? (() => {
+                const validLen =
+                  result?.validAnswers?.length ??
+                  (Array.isArray(message.answers) ? message.answers.length : 0);
+                const invalidLen = result?.invalidAnswers?.length ?? 0;
+                const isConditional = message.phase === "conditional";
+                return {
+                  filledCount: validLen,
+                  flaggedCount: isConditional ? 0 : invalidLen,
+                  skippedCount: isConditional ? invalidLen : 0,
+                };
+              })()
+            : {};
+        emit("agent.ca.fill", {
+          op,
+          messageType: message.type,
+          success: true,
+          durationMs: Date.now() - startedAt,
+          refreshed,
+          ...opMeta,
+          ...abMeta,
+          ...successCounts,
+        });
         sendResponse({ success: true, refreshed, result });
       } catch (err) {
-        sendResponse({ success: false, error: String(err?.message || err) });
+        const code = String(err && err.message ? err.message : err);
+        emit("agent.ca.error", { code, messageType: message.type });
+        emit("agent.ca.fill", {
+          op,
+          messageType: message.type,
+          success: false,
+          errorCode: code,
+          durationMs: Date.now() - startedAt,
+          ...opMeta,
+          ...abMeta,
+        });
+        // Surface refresh-specific failures as agent.ca.refresh so dashboards
+        // can split refresh failures from API failures.
+        if (
+          code === "token_expired" ||
+          code === "device_revoked" ||
+          code.startsWith("cognito_refresh_failed") ||
+          code === "cognito_no_id_token"
+        ) {
+          emit("agent.ca.refresh", { success: false, errorCode: code });
+        }
+        sendResponse({ success: false, code, error: code });
       }
     })();
     return true; // async response

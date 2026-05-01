@@ -56,6 +56,11 @@ window.addEventListener("message", (event) => {
   // forwards it to the apply.commonapp.org content script. Response is posted
   // back to the page so the SPA's Promise resolves. Each request carries a
   // requestId for correlation. See POC #5 / common-app-broker.js.
+  //
+  // Phase 1 #1.7: forward the per-session correlation nonce to the SW so it
+  // can validate against the registered tab nonce before forwarding to the
+  // broker. The Accelerator page mints the nonce on mount and registers it
+  // via CI_REGISTER_NONCE_FROM_CI below.
   if (event.data?.type && event.data.type.startsWith("CI_CA_")) {
     const { type, requestId, ...payload } = event.data;
     chrome.runtime.sendMessage({ type, ...payload }, (response) => {
@@ -68,6 +73,25 @@ window.addEventListener("message", (event) => {
         window.location.origin,
       );
     });
+    return;
+  }
+
+  // Accelerator page registers its per-session nonce with the SW (Phase 1 #1.7).
+  // The SW associates the nonce with this tab; subsequent CI_CA_* messages
+  // from the same tab must carry the same nonce.
+  if (event.data?.type === "CI_REGISTER_NONCE_FROM_CI") {
+    chrome.runtime.sendMessage(
+      { type: "CI_REGISTER_NONCE", nonce: event.data.nonce },
+      (response) => {
+        window.postMessage(
+          {
+            type: "CI_REGISTER_NONCE_ACK",
+            success: !!response?.success,
+          },
+          window.location.origin,
+        );
+      },
+    );
     return;
   }
 });

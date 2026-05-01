@@ -80,49 +80,156 @@ describe("TWIN_ENDPOINT_MAP", () => {
   });
 });
 
-describe("COMMON_APP_SECTIONS", () => {
-  it("has 5 sections", () => {
+describe("COMMON_APP_SECTIONS — removed in Phase 3 #15", () => {
+  // The production COMMON_APP_SECTIONS table was removed when path D became
+  // the canonical Common App fill mechanism (see form-filler.js header
+  // comment for "Fill All Sections"). The test fixture above is retained
+  // only to assert the contract that nothing in the production file imports
+  // or references it — keeping a regression safety net against an
+  // accidental re-introduction of DOM-based CA filling.
+  it("retains shape parity with the historical 5-section taxonomy", () => {
     expect(COMMON_APP_SECTIONS).toHaveLength(5);
+    expect(COMMON_APP_SECTIONS.map((s) => s.key)).toEqual([
+      "profile",
+      "education",
+      "testing",
+      "activities",
+      "essays",
+    ]);
   });
+});
 
-  it("every section has required fields", () => {
-    COMMON_APP_SECTIONS.forEach((s) => {
-      expect(s).toHaveProperty("key");
-      expect(s).toHaveProperty("label");
-      expect(s).toHaveProperty("urlPath");
-      expect(s).toHaveProperty("twinEndpoint");
-      expect(s.urlPath).toMatch(/^\/common\//);
+describe("fill entry points — path D routing for common_app (Phase 3 #15)", () => {
+  // Phase 5 QA fix (Minor): the previous version of this block used a
+  // local mirror of the production refusal branch. That risked drift —
+  // the test could pass while the real branch regressed. We now load
+  // the actual `form-filler.js` source into a fresh VM context with
+  // stubbed browser globals and invoke the real exported entry points
+  // (`window.__ciFill` / `window.__ciFillAll`).
+
+  // eslint-disable-next-line no-undef
+  const vm = require("vm");
+  // eslint-disable-next-line no-undef
+  const fs = require("fs");
+  // eslint-disable-next-line no-undef
+  const path = require("path");
+
+  function loadFormFillerWith({ portal, section }) {
+    const events = [];
+    const sandboxWindow = {
+      __ciPortal: portal,
+      __ciSection: section,
+      __ciTelemetry: {
+        trackEvent: (name, props) => events.push({ name, props }),
+        trackFillStarted: () => {},
+        trackPortalUnknown: () => {},
+      },
+    };
+    const sandboxChrome = {
+      runtime: {
+        sendMessage: (msg, cb) => {
+          if (msg && msg.type === "CI_GET_MEMBER_STATUS") {
+            cb({ isPremium: true });
+            return;
+          }
+          cb({ ok: true });
+        },
+        onMessage: { addListener: () => {} },
+      },
+      storage: {
+        local: {
+          get: (_keys, cb) => cb({}),
+          set: (_v, cb) => cb && cb(),
+          remove: (_k, cb) => cb && cb(),
+        },
+      },
+    };
+    const ctx = {
+      window: sandboxWindow,
+      chrome: sandboxChrome,
+      document: {
+        querySelectorAll: () => [],
+        querySelector: () => null,
+        createElement: () => ({
+          style: {},
+          appendChild: () => {},
+          remove: () => {},
+          setAttribute: () => {},
+        }),
+        body: { appendChild: () => {} },
+      },
+      console: { log: () => {}, warn: () => {}, error: () => {} },
+      setTimeout,
+      clearTimeout,
+      Promise,
+    };
+    // Many top-level expressions in form-filler.js reference globals as
+    // bare names (e.g. `chrome.storage.local.get(...)`). vm sandboxes do
+    // not give those access to `window.x`, so we splat the relevant
+    // shims onto the context object directly.
+    ctx.location = { hostname: "example.test" };
+    vm.createContext(ctx);
+    const source = fs.readFileSync(
+      path.resolve(__dirname, "../src/content/form-filler.js"),
+      "utf8",
+    );
+    vm.runInContext(source, ctx);
+    return { window: sandboxWindow, events };
+  }
+
+  it("real fillCurrentSection refuses common_app with path_d_required + enriched telemetry", async () => {
+    const { window, events } = loadFormFillerWith({
+      portal: "common_app",
+      section: "profile",
+    });
+    const out = await window.__ciFill();
+    expect(out).toEqual({
+      success: false,
+      reason: "path_d_required",
+      message: expect.stringMatching(/Application Accelerator/),
+    });
+    const refusal = events.find(
+      (e) => e.name === "agent.fill.common_app_refused",
+    );
+    expect(refusal).toBeDefined();
+    expect(refusal.props).toEqual({
+      portal: "common_app",
+      section: "profile",
+      reason: "path_d_required",
     });
   });
 
-  it("sections are in logical order (profile first, essays last)", () => {
-    expect(COMMON_APP_SECTIONS[0].key).toBe("profile");
-    expect(COMMON_APP_SECTIONS[COMMON_APP_SECTIONS.length - 1].key).toBe(
-      "essays",
+  it("real fillAllSections refuses common_app with path_d_required + enriched telemetry", async () => {
+    const { window, events } = loadFormFillerWith({
+      portal: "common_app",
+      section: "profile",
+    });
+    const out = await window.__ciFillAll();
+    expect(out).toEqual({
+      success: false,
+      reason: "path_d_required",
+      message: expect.stringMatching(/Application Accelerator/),
+    });
+    const refusal = events.find(
+      (e) => e.name === "agent.fill_all.common_app_refused",
     );
+    expect(refusal).toBeDefined();
+    expect(refusal.props).toEqual({
+      portal: "common_app",
+      reason: "path_d_required",
+    });
   });
 
-  it("each section has a unique key", () => {
-    const keys = COMMON_APP_SECTIONS.map((s) => s.key);
-    expect(new Set(keys).size).toBe(keys.length);
+  it("real fillCurrentSection short-circuits on missing portal (no DOM filling)", async () => {
+    const { window } = loadFormFillerWith({ portal: null, section: null });
+    const out = await window.__ciFill();
+    expect(out).toEqual({ success: false, reason: "not_on_portal" });
   });
 
-  it("each section has a unique urlPath", () => {
-    const paths = COMMON_APP_SECTIONS.map((s) => s.urlPath);
-    expect(new Set(paths).size).toBe(paths.length);
-  });
-
-  it("activities section uses /common/7/232", () => {
-    const activities = COMMON_APP_SECTIONS.find((s) => s.key === "activities");
-    expect(activities.urlPath).toBe("/common/7/232");
-    expect(activities.twinEndpoint).toBe("activities");
-  });
-
-  it("education and testing use 'profile' twin endpoint", () => {
-    const edu = COMMON_APP_SECTIONS.find((s) => s.key === "education");
-    const test = COMMON_APP_SECTIONS.find((s) => s.key === "testing");
-    expect(edu.twinEndpoint).toBe("profile");
-    expect(test.twinEndpoint).toBe("profile");
+  it("real fillAllSections short-circuits on missing portal", async () => {
+    const { window } = loadFormFillerWith({ portal: null, section: null });
+    const out = await window.__ciFillAll();
+    expect(out).toEqual({ success: false, reason: "not_on_portal" });
   });
 });
 

@@ -6,8 +6,11 @@
   "permissions": ["storage", "activeTab"],
   "host_permissions": [
     "https://www.collegeinsight.ai/*",
+    "https://collegeinsight.ai/*",
+    "https://collegeinsightui.azurewebsites.net/*",
     "https://api.collegeinsight.ai/*",
     "http://localhost:4200/*",
+    "http://localhost:7206/*",
     "https://localhost:5001/*",
     "https://apply.commonapp.org/*",
     "https://api25.commonapp.org/*",
@@ -25,7 +28,13 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.collegeinsight.ai/*"],
+      "matches": [
+        "https://www.collegeinsight.ai/*",
+        "https://collegeinsight.ai/*",
+        "https://collegeinsightui.azurewebsites.net/*",
+        "http://localhost:7206/*",
+        "https://localhost:5001/*"
+      ],
       "js": ["src/content/ci-bridge.js"],
       "run_at": "document_idle"
     },
@@ -52,7 +61,10 @@
     },
     {
       "matches": ["https://apply.commonapp.org/*"],
-      "js": ["src/content/common-app-broker.js"],
+      "js": [
+        "src/lib/api-key-extractor.js",
+        "src/content/common-app-broker.js"
+      ],
       "run_at": "document_idle"
     }
   ],

@@ -62,6 +62,26 @@ async function fillCurrentSection() {
     return { success: false, reason: "not_on_portal" };
   }
 
+  // Phase 3 #15 — Common App is now owned by the API broker (path D) on
+  // apply.commonapp.org. The DOM filler must never touch CA fields, even if
+  // a stale call site asks it to. Refusing here is also a defense-in-depth
+  // backstop: the Accelerator SPA routes `common_app` to `commonAppBridge`,
+  // but a stale popup or bookmarked CI_FILL_SECTION dispatch could still land
+  // here.
+  if (portal === "common_app") {
+    window.__ciTelemetry?.trackEvent("agent.fill.common_app_refused", {
+      portal,
+      section,
+      reason: "path_d_required",
+    });
+    return {
+      success: false,
+      reason: "path_d_required",
+      message:
+        "Common App fills are handled by the CollegeInsight API broker. Use the Application Accelerator on collegeinsight.ai.",
+    };
+  }
+
   try {
     // 1. Fetch portal map (or AI fallback for unknown portals)
     window.__ciTelemetry?.trackFillStarted(portal, section);
@@ -489,37 +509,47 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 // ════════════════════════════════════════════════════════════════
 // "Fill All Sections" — Sequential multi-section fill flow
 // Triggered from CI's Application Prep page via ci-bridge
+//
+// Phase 3 #15: Common App is no longer routed here. The Application
+// Accelerator dispatches `common_app` to the API broker (path D) via
+// `commonAppBridge.callCommonApp("CI_CA_SAVE_ANSWERS", ...)`. This file
+// keeps multi-section orchestration only for portals that still need DOM
+// filling — today that means UC; FAFSA / Coalition / College Board / ACT
+// remain single-section AI-fallback only until per-portal section tables
+// are added below. The previous `COMMON_APP_SECTIONS` table was removed in
+// this task; do not re-introduce it.
 // ════════════════════════════════════════════════════════════════
 
-const COMMON_APP_SECTIONS = [
+// Phase 1 #2.5 — UC Application section config (DOM-path scaffold).
+// TODO: validate urlPath values against the live apply.universityofcalifornia.edu
+// portal as part of the UC end-to-end DOM validation work. Section keys mirror
+// the Common App taxonomy where possible so per-section telemetry is comparable.
+// Until live validation completes, the per-portal validation status table in
+// design doc Phase 1 #2.5 must list UC as "DOM scaffold only — pending live
+// validation" and the field-mapper UC selectors need verification.
+const UC_APP_SECTIONS = [
   {
     key: "profile",
-    label: "Personal Info",
-    urlPath: "/common/1/232",
+    label: "About You",
+    urlPath: "/applicant/about-you",
     compassEndpoint: "profile",
   },
   {
     key: "education",
-    label: "Education",
-    urlPath: "/common/3/232",
-    compassEndpoint: "profile",
-  },
-  {
-    key: "testing",
-    label: "Testing",
-    urlPath: "/common/5/232",
+    label: "Academic History",
+    urlPath: "/applicant/academic-history",
     compassEndpoint: "profile",
   },
   {
     key: "activities",
-    label: "Activities",
-    urlPath: "/common/7/232",
+    label: "Activities & Awards",
+    urlPath: "/applicant/activities-awards",
     compassEndpoint: "activities",
   },
   {
     key: "essays",
-    label: "Writing",
-    urlPath: "/common/8/232",
+    label: "Personal Insight Questions",
+    urlPath: "/applicant/personal-insight",
     compassEndpoint: "essays",
   },
 ];
@@ -532,7 +562,26 @@ async function fillAllSections() {
   const portal = window.__ciPortal;
   if (!portal) return { success: false, reason: "not_on_portal" };
 
-  const sections = portal === "common_app" ? COMMON_APP_SECTIONS : [];
+  // Phase 3 #15 — same path-D routing rule as `fillCurrentSection`. Stale
+  // "Fill All" callers are redirected to the Accelerator instead of trying
+  // to walk Common App sections via the DOM.
+  if (portal === "common_app") {
+    window.__ciTelemetry?.trackEvent("agent.fill_all.common_app_refused", {
+      portal,
+      reason: "path_d_required",
+    });
+    return {
+      success: false,
+      reason: "path_d_required",
+      message:
+        "Common App fills are handled by the CollegeInsight API broker. Use the Application Accelerator on collegeinsight.ai.",
+    };
+  }
+
+  let sections;
+  if (portal === "uc_app") sections = UC_APP_SECTIONS;
+  else sections = [];
+
   if (sections.length === 0) {
     return { success: false, reason: "no_fill_all_config" };
   }

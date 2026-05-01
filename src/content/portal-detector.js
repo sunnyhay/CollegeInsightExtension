@@ -5,7 +5,10 @@
 
 const PORTAL_PATTERNS = [
   { portal: "common_app", pattern: /apply\.commonapp\.org/i },
-  { portal: "uc_app", pattern: /admission\.universityofcalifornia\.edu/i },
+  // UC: both the marketing portal (admission.*) and the actual application
+  // portal (apply.*). Phase 1 #2.5 added the apply.* host because that's
+  // where fill execution happens; admission.* is informational only.
+  { portal: "uc_app", pattern: /(?:admission|apply)\.universityofcalifornia\.edu/i },
   { portal: "fafsa", pattern: /studentaid\.gov/i },
   { portal: "css_profile", pattern: /cssprofile\.collegeboard\.org/i },
   { portal: "college_board", pattern: /collegeboard\.org/i },
