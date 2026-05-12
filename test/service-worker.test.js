@@ -15,8 +15,6 @@
  * listener directly to assert the gate's behavior.
  */
 
-/* eslint-env node, jest */
-
 const vm = require("vm");
 const fs = require("fs");
 const path = require("path");

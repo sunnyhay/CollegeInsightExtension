@@ -103,3 +103,27 @@ setInterval(
   },
   45 * 60 * 1000,
 );
+
+// -- Opportunity A (push-based connection events) --
+//
+// The service worker pushes `CI_CA_CONNECTION_STATE` frames whenever the
+// Common App broker reports a session-state change (connected /
+// disconnected / expired). We forward them to the SPA as a same-origin
+// window.postMessage so commonAppBridge's listeners can fire instantly
+// instead of waiting for the next 5-second poll.
+chrome.runtime.onMessage.addListener((message) => {
+  if (!message || typeof message.type !== "string") return undefined;
+  if (message.type === "CI_CA_CONNECTION_STATE") {
+    window.postMessage(
+      {
+        type: "CI_CA_CONNECTION_STATE",
+        state: message.state,
+        portal: message.portal,
+        meta: message.meta || null,
+      },
+      window.location.origin,
+    );
+  }
+  // No async response — return falsy so the SW knows we're not handling.
+  return undefined;
+});

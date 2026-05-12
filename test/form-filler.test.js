@@ -107,11 +107,8 @@ describe("fill entry points — path D routing for common_app (Phase 3 #15)", ()
   // stubbed browser globals and invoke the real exported entry points
   // (`window.__ciFill` / `window.__ciFillAll`).
 
-  // eslint-disable-next-line no-undef
   const vm = require("vm");
-  // eslint-disable-next-line no-undef
   const fs = require("fs");
-  // eslint-disable-next-line no-undef
   const path = require("path");
 
   function loadFormFillerWith({ portal, section }) {

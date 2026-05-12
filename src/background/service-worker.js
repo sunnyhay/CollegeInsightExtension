@@ -74,6 +74,82 @@ const tabNonces = new Map(); // tabId → { nonce, registeredAt }
 const NONCE_TTL_MS = 8 * 60 * 60 * 1000; // 8h — covers a long fill session
 const CI_CA_AUTH_FREE = new Set(["CI_CA_PING"]);
 
+// Opportunity A (§8.0.11) — push connection-state events to subscribed
+// SPA tabs. We treat the tabNonces registry as the canonical "subscribed
+// SPA tabs" set: a tab that registered a nonce is, by definition, an
+// Accelerator page that wants to receive push events.
+//
+// `pendingPushQueue` covers the race where the broker fires
+// `CA_CONNECTION_STATE` between extension wake and the SPA's first
+// nonce registration — we hold the most recent event for 5 s and flush
+// it on the next nonce registration.
+const pendingPushQueue = []; // { evt, expiresAt }
+const PENDING_PUSH_TTL_MS = 5000;
+
+function pushQueueAdd(evt) {
+  pendingPushQueue.push({ evt, expiresAt: Date.now() + PENDING_PUSH_TTL_MS });
+  // Bound the queue — drop oldest if we somehow accumulate.
+  while (pendingPushQueue.length > 4) pendingPushQueue.shift();
+}
+
+function pushQueueFlushTo(tabId) {
+  const now = Date.now();
+  while (pendingPushQueue.length > 0 && pendingPushQueue[0].expiresAt < now) {
+    pendingPushQueue.shift();
+  }
+  for (const { evt } of pendingPushQueue) {
+    sendPushToTab(tabId, evt);
+  }
+}
+
+function sendPushToTab(tabId, evt) {
+  try {
+    chrome.tabs.sendMessage(tabId, evt, () => {
+      // Swallow lastError — a tab may be closed mid-flight.
+      void chrome.runtime.lastError;
+    });
+  } catch (e) {
+    // ignore
+  }
+}
+
+function broadcastConnectionState(state, portal, meta) {
+  const evt = {
+    type: "CI_CA_CONNECTION_STATE",
+    state,
+    portal,
+    meta: meta || null,
+  };
+  const subscribedCount = tabNonces.size;
+  if (subscribedCount === 0) {
+    pushQueueAdd(evt);
+    swTrackEvent("agent.ca.state_pushed", {
+      state,
+      portal,
+      subscribedTabCount: 0,
+      queued: true,
+    });
+    return;
+  }
+  for (const tabId of tabNonces.keys()) {
+    sendPushToTab(tabId, evt);
+  }
+  swTrackEvent("agent.ca.state_pushed", {
+    state,
+    portal,
+    subscribedTabCount: subscribedCount,
+    queued: false,
+  });
+}
+
+// Tab cleanup — prune nonces when an Accelerator tab closes so the
+// registry doesn't leak.
+if (typeof chrome !== "undefined" && chrome.tabs?.onRemoved) {
+  chrome.tabs.onRemoved.addListener((tabId) => {
+    tabNonces.delete(tabId);
+  });
+}
+
 function registerNonce(tabId, nonce) {
   if (
     typeof tabId !== "number" ||
@@ -83,6 +159,8 @@ function registerNonce(tabId, nonce) {
     return false;
   }
   tabNonces.set(tabId, { nonce, registeredAt: Date.now() });
+  // Flush any queued push events to this tab.
+  pushQueueFlushTo(tabId);
   return true;
 }
 
@@ -414,6 +492,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     chrome.storage.local.set({
       caSession: { ...message.meta, capturedAt: Date.now() },
     });
+    return false;
+  }
+
+  // Opportunity A (§8.0.11) — broker fan-out. Broker emits state-machine
+  // events (`connected` / `disconnected` / `expired`); we broadcast to
+  // every SPA tab in the nonce registry.
+  if (message.type === "CA_CONNECTION_STATE") {
+    if (message.state === "connected") {
+      // Mirror the legacy CA_SESSION_CAPTURED side-effect so popup/SPA
+      // can read `caSession` from chrome.storage if needed.
+      chrome.storage.local.set({
+        caSession: { ...(message.meta || {}), capturedAt: Date.now() },
+      });
+    }
+    broadcastConnectionState(
+      message.state,
+      message.portal || "common_app",
+      message.meta,
+    );
     return false;
   }
 

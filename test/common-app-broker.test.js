@@ -18,8 +18,6 @@
  * assert the captured `agent.ca.fill` envelope shape.
  */
 
-/* eslint-env node, jest */
-
 const vm = require("vm");
 const fs = require("fs");
 const path = require("path");

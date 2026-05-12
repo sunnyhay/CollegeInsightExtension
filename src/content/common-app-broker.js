@@ -241,17 +241,68 @@
       hasDeviceKey: !!session.deviceKey,
       idTokenExp: jwtPayload(session.idToken)?.exp || null,
     });
+    const meta = {
+      username: session.username,
+      hasRefreshToken: !!session.refreshToken,
+      hasDeviceKey: !!session.deviceKey,
+      idTokenExp: jwtPayload(session.idToken)?.exp || null,
+      capturedAt: Date.now(),
+    };
+    // Legacy event — kept for back-compat with any existing SW handler.
     chrome.runtime.sendMessage({
       type: "CA_SESSION_CAPTURED",
-      // Don't ship tokens to SW long-term — only the metadata it needs to know we're connected.
-      // Future enhancement: SW can request fresh tokens via CA_REQUEST_REFRESH if needed for
-      // cross-tab fills.
-      meta: {
-        username: session.username,
-        hasRefreshToken: !!session.refreshToken,
-        hasDeviceKey: !!session.deviceKey,
-        idTokenExp: jwtPayload(session.idToken)?.exp || null,
-      },
+      meta,
+    });
+    // Opportunity A — state-machine event for push-based fan-out to SPA tabs.
+    emitConnectionState("connected", meta);
+  }
+
+  /**
+   * Opportunity A (§8.0.11) — emit a connection-state change to the SW.
+   * The SW broadcasts to subscribed SPA tabs via chrome.tabs.sendMessage.
+   *
+   * @param {('connected'|'disconnected'|'expired')} state
+   * @param {object} [meta]
+   */
+  function emitConnectionState(state, meta) {
+    try {
+      chrome.runtime.sendMessage({
+        type: "CA_CONNECTION_STATE",
+        state,
+        portal: "common_app",
+        meta: meta || null,
+      });
+      emit("agent.ca.state_pushed", {
+        state,
+        portal: "common_app",
+        latencyMsFromCapture: meta?.capturedAt
+          ? Math.max(0, Date.now() - meta.capturedAt)
+          : null,
+      });
+    } catch (e) {
+      // SW disconnected — we'll re-fire on next event.
+    }
+  }
+
+  // Listen for localStorage clears (sign-out from another tab) — fire
+  // `disconnected`. The 'storage' event fires only for changes from
+  // *other* tabs to the same origin's localStorage; sign-out via the
+  // Common App UI in this tab requires the broker's onbeforeunload
+  // handling instead, but covers the common multi-tab case.
+  if (typeof window !== "undefined") {
+    window.addEventListener("storage", (e) => {
+      if (!e || !e.key) return;
+      if (
+        e.key.startsWith("CognitoIdentityServiceProvider.") &&
+        e.key.endsWith(".idToken") &&
+        e.newValue == null
+      ) {
+        emitConnectionState("disconnected", { reason: "storage_cleared" });
+      }
+    });
+    window.addEventListener("beforeunload", () => {
+      // Tab closing — let SPA tabs know.
+      emitConnectionState("disconnected", { reason: "tab_unloading" });
     });
   }
 
@@ -402,6 +453,9 @@
           code === "cognito_no_id_token"
         ) {
           emit("agent.ca.refresh", { success: false, errorCode: code });
+          // Opportunity A — push `expired` so SPA tabs can flip to the
+          // reconnect variant of the signIn step without polling.
+          emitConnectionState("expired", { errorCode: code });
         }
         sendResponse({ success: false, code, error: code });
       }
