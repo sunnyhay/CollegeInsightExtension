@@ -224,6 +224,217 @@
     return caApi("POST", "/answer/v2", payload, idToken);
   }
 
+  // ── POC #6 read-existing-answers operations ──────────────────────────
+  //
+  // The universal answer-read endpoint discovered May 14, 2026:
+  //
+  //   GET /answer/sections/<sectionId>
+  //
+  // Same endpoint serves both shared sections (small int IDs, e.g.
+  // 11=Personal Information, 26=Household, 232=Activities) and per-college
+  // sections (≥1000 IDs unique to each college, e.g. 6717=Cornell/Academics).
+  //
+  // Full discovery + 18-field round-trip validation in POC #6 (see
+  // CollegeMatchFrontend/docs/gen6/APPLICATION_ACCELERATOR_DESIGN.md §9).
+  //
+  // The foundation/per-college helpers below fan out across the relevant
+  // sectionIds with a concurrency cap of 4 (per §8.0.14 Q.8) so a 10-college
+  // user's full read completes in ~1-3 seconds without tripping CA's rate
+  // limiter. CA's own SPA fans out ≥6 parallel GETs on dashboard load
+  // without throttling, so 4 is safely conservative.
+
+  /** GET answers for a single section. Returns the raw Answer[] array. */
+  async function listSectionAnswers(sectionId, idToken) {
+    return caApi("GET", `/answer/sections/${sectionId}`, undefined, idToken);
+  }
+
+  /** GET the section structure for a screen (datacatalog metadata).
+   *  Returns an array of `{id, name, order, screenId, hasDefaultVisibleQuestions}`. */
+  async function listScreenSections(screenId, idToken) {
+    return caApi(
+      "GET",
+      `/datacatalog/screens/${screenId}/sections`,
+      undefined,
+      idToken,
+    );
+  }
+
+  /** GET the screens for one of the user's colleges (datacatalog metadata).
+   *  Returns `[{id: screenId, screenType, sections: [sectionId], ...}, ...]`.
+   *  We filter to screenType ∈ {2, 3} elsewhere (Questions + Writing Supplement). */
+  async function listMemberScreens(memberId, idToken) {
+    return caApi(
+      "GET",
+      `/datacatalog/members/${memberId}/screens`,
+      undefined,
+      idToken,
+    );
+  }
+
+  /** Foundation screen IDs the Accelerator's MVP fills. Excludes
+   *  Courses & Grades (screenId 13) which uses a separate endpoint shape
+   *  (`/answer/CoursesAndGrades`) and is out of scope for MVP. */
+  const FOUNDATION_SCREEN_IDS = [
+    3, // Profile
+    5, // Family
+    4, // Education
+    2, // Testing
+    7, // Activities
+    6, // Writing
+  ];
+
+  /** Run `tasks` (array of `() => Promise`) with a concurrency cap. Returns
+   *  results in original task order. Failures resolve to `{ ok: false,
+   *  error }` rather than rejecting, so a single section's failure doesn't
+   *  abort the whole read. */
+  async function runWithConcurrency(tasks, concurrency) {
+    const results = new Array(tasks.length);
+    let nextIndex = 0;
+    async function worker() {
+      while (true) {
+        const i = nextIndex++;
+        if (i >= tasks.length) return;
+        try {
+          results[i] = { ok: true, value: await tasks[i]() };
+        } catch (err) {
+          results[i] = { ok: false, error: err?.message || String(err) };
+        }
+      }
+    }
+    const n = Math.min(concurrency, tasks.length);
+    await Promise.all(Array.from({ length: n }, () => worker()));
+    return results;
+  }
+
+  /** Read every visible foundation section's existing answers.
+   *
+   *  Returns:
+   *    {
+   *      sectionsBySection: { [sectionId]: Answer[] },
+   *      structure: [{ screenId, screenLabel?, sections: [{sectionId,name}] }],
+   *      errors: [{ scope: "schema"|"answers", screenId?, sectionId?, error }],
+   *    }
+   */
+  async function listFoundationAnswers(idToken) {
+    const errors = [];
+    const structure = [];
+    // 1) Fetch the section list for every foundation screen (concurrency 4).
+    const schemaTasks = FOUNDATION_SCREEN_IDS.map(
+      (screenId) => () => listScreenSections(screenId, idToken),
+    );
+    const schemaResults = await runWithConcurrency(schemaTasks, 4);
+    const sectionIdsToFetch = [];
+    schemaResults.forEach((r, i) => {
+      const screenId = FOUNDATION_SCREEN_IDS[i];
+      if (!r.ok) {
+        errors.push({ scope: "schema", screenId, error: r.error });
+        structure.push({ screenId, sections: [] });
+        return;
+      }
+      const sections = (r.value || [])
+        .filter((s) => s.hasDefaultVisibleQuestions)
+        .map((s) => ({ sectionId: s.id, name: s.name }));
+      structure.push({ screenId, sections });
+      for (const s of sections) sectionIdsToFetch.push(s.sectionId);
+    });
+
+    // 2) Fetch each section's answers (concurrency 4).
+    const answerTasks = sectionIdsToFetch.map(
+      (sectionId) => () => listSectionAnswers(sectionId, idToken),
+    );
+    const answerResults = await runWithConcurrency(answerTasks, 4);
+    const sectionsBySection = {};
+    answerResults.forEach((r, i) => {
+      const sectionId = sectionIdsToFetch[i];
+      if (!r.ok) {
+        errors.push({ scope: "answers", sectionId, error: r.error });
+        sectionsBySection[sectionId] = [];
+      } else {
+        sectionsBySection[sectionId] = Array.isArray(r.value) ? r.value : [];
+      }
+    });
+    return { sectionsBySection, structure, errors };
+  }
+
+  /** Read every visible per-college section's existing answers for one
+   *  college. Only walks screenType ∈ {2, 3} (Questions + Writing Supplement).
+   *
+   *  Returns:
+   *    {
+   *      sectionsBySection: { [sectionId]: Answer[] },
+   *      structure: [{ screenId, screenName, screenType, sections: [{sectionId,name}] }],
+   *      errors: [{ scope, screenId?, sectionId?, error }],
+   *    }
+   */
+  async function listCollegeAnswers(memberId, idToken) {
+    const errors = [];
+    const structure = [];
+    let screens;
+    try {
+      screens = await listMemberScreens(memberId, idToken);
+    } catch (err) {
+      return {
+        sectionsBySection: {},
+        structure: [],
+        errors: [
+          {
+            scope: "member-screens",
+            memberId,
+            error: err?.message || String(err),
+          },
+        ],
+      };
+    }
+    const writableScreens = (screens || []).filter(
+      (s) => s.screenType === 2 || s.screenType === 3,
+    );
+    // 1) Section list per screen (concurrency 4).
+    const schemaTasks = writableScreens.map(
+      (sc) => () => listScreenSections(sc.id, idToken),
+    );
+    const schemaResults = await runWithConcurrency(schemaTasks, 4);
+    const sectionIdsToFetch = [];
+    schemaResults.forEach((r, i) => {
+      const sc = writableScreens[i];
+      if (!r.ok) {
+        errors.push({ scope: "schema", screenId: sc.id, error: r.error });
+        structure.push({
+          screenId: sc.id,
+          screenName: sc.name,
+          screenType: sc.screenType,
+          sections: [],
+        });
+        return;
+      }
+      const sections = (r.value || [])
+        .filter((s) => s.hasDefaultVisibleQuestions)
+        .map((s) => ({ sectionId: s.id, name: s.name }));
+      structure.push({
+        screenId: sc.id,
+        screenName: sc.name,
+        screenType: sc.screenType,
+        sections,
+      });
+      for (const s of sections) sectionIdsToFetch.push(s.sectionId);
+    });
+    // 2) Per-section answers (concurrency 4).
+    const answerTasks = sectionIdsToFetch.map(
+      (sectionId) => () => listSectionAnswers(sectionId, idToken),
+    );
+    const answerResults = await runWithConcurrency(answerTasks, 4);
+    const sectionsBySection = {};
+    answerResults.forEach((r, i) => {
+      const sectionId = sectionIdsToFetch[i];
+      if (!r.ok) {
+        errors.push({ scope: "answers", sectionId, error: r.error });
+        sectionsBySection[sectionId] = [];
+      } else {
+        sectionsBySection[sectionId] = Array.isArray(r.value) ? r.value : [];
+      }
+    });
+    return { sectionsBySection, structure, errors };
+  }
+
   // --- Initial session capture on page load ---
 
   function captureAndReportSession() {
@@ -315,6 +526,9 @@
     CA_ADD_COLLEGES: "add_colleges",
     CA_REMOVE_COLLEGE: "remove_college",
     CA_SAVE_ANSWERS: "save_answers",
+    CA_LIST_SECTION_ANSWERS: "list_section_answers",
+    CA_LIST_FOUNDATION_ANSWERS: "list_foundation_answers",
+    CA_LIST_COLLEGE_ANSWERS: "list_college_answers",
     CA_PING: "ping",
   };
 
@@ -382,6 +596,15 @@
             break;
           case "CA_SAVE_ANSWERS":
             result = await saveAnswers(message.answers, idToken);
+            break;
+          case "CA_LIST_SECTION_ANSWERS":
+            result = await listSectionAnswers(message.sectionId, idToken);
+            break;
+          case "CA_LIST_FOUNDATION_ANSWERS":
+            result = await listFoundationAnswers(idToken);
+            break;
+          case "CA_LIST_COLLEGE_ANSWERS":
+            result = await listCollegeAnswers(message.memberId, idToken);
             break;
           case "CA_PING":
             result = { connected: true, idTokenRefreshed: refreshed };

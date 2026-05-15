@@ -1,0 +1,249 @@
+[
+  {
+    "tier": "foundation",
+    "screen": "Profile",
+    "sectionId": 11,
+    "sectionName": "Personal Information",
+    "answers": [
+      {
+        "questionId": 174,
+        "label": "Middle name",
+        "sent": "POC6-Profile-q174",
+        "got": "POC6-Profile-q174",
+        "answerIdAfter": 492201183,
+        "match": true
+      }
+    ]
+  },
+  {
+    "tier": "foundation",
+    "screen": "Profile",
+    "sectionId": 17,
+    "sectionName": "Geography and Nationality",
+    "answers": [
+      {
+        "questionId": 219,
+        "label": "City of birth",
+        "sent": "POC6-Profile-q219",
+        "got": "POC6-Profile-q219",
+        "answerIdAfter": 500653250,
+        "match": true
+      }
+    ]
+  },
+  {
+    "tier": "foundation",
+    "screen": "Family",
+    "sectionId": 27,
+    "sectionName": "Parent 1",
+    "answers": [
+      {
+        "questionId": 375,
+        "label": "First/Given name",
+        "sent": "POC6-Family-q375",
+        "got": "POC6-Family-q375",
+        "answerIdAfter": 500653294,
+        "match": true
+      },
+      {
+        "questionId": 376,
+        "label": "Middle initial",
+        "sent": "PO",
+        "got": "PO",
+        "answerIdAfter": 500653295,
+        "match": true
+      }
+    ]
+  },
+  {
+    "tier": "foundation",
+    "screen": "Family",
+    "sectionId": 28,
+    "sectionName": "Parent 2",
+    "answers": [
+      {
+        "questionId": 457,
+        "label": "First/Given name",
+        "sent": "POC6-Family-q457",
+        "got": "POC6-Family-q457",
+        "answerIdAfter": 500653308,
+        "match": true
+      },
+      {
+        "questionId": 458,
+        "label": "Middle initial",
+        "sent": "PO",
+        "got": "PO",
+        "answerIdAfter": 500653309,
+        "match": true
+      }
+    ]
+  },
+  {
+    "tier": "foundation",
+    "screen": "Education",
+    "sectionId": 23,
+    "sectionName": "Grades",
+    "answers": [
+      {
+        "questionId": 303,
+        "label": "Graduating class size (approx.)",
+        "sent": "POC6-",
+        "got": null,
+        "answerIdAfter": 0,
+        "match": false
+      },
+      {
+        "questionId": 304,
+        "label": "Cumulative GPA",
+        "sent": "POC6-E",
+        "got": null,
+        "answerIdAfter": 0,
+        "match": false
+      }
+    ]
+  },
+  {
+    "tier": "foundation",
+    "screen": "Activities",
+    "sectionId": 232,
+    "sectionName": "Activities",
+    "answers": [
+      {
+        "questionId": 932,
+        "label": "Position/Leadership description <br /> (Max characters: 50)",
+        "sent": "POC6-Activities-q932",
+        "got": "POC6-Activities-q932",
+        "answerIdAfter": 500653431,
+        "match": true
+      },
+      {
+        "questionId": 1958,
+        "label": "Organization Name <br /> (Max characters: 100)",
+        "sent": "POC6-Activities-q1958",
+        "got": "POC6-Activities-q1958",
+        "answerIdAfter": 500653432,
+        "match": true
+      }
+    ]
+  },
+  {
+    "tier": "perCollege",
+    "college": "Harvard University",
+    "memberId": 116,
+    "screen": "Questions",
+    "screenId": 3151,
+    "sectionId": 9539,
+    "sectionName": "Academics",
+    "answers": [
+      {
+        "questionId": 1406896,
+        "label": "If you listed any honors or awards in the Honors section of the Common Application, please provide a link to the honor/award if available.",
+        "sent": "POC6-Harvard -q1406896",
+        "got": "POC6-Harvard -q1406896",
+        "answerIdAfter": 434349910,
+        "match": true
+      }
+    ]
+  },
+  {
+    "tier": "perCollege",
+    "college": "Harvard University",
+    "memberId": 116,
+    "screen": "Questions",
+    "screenId": 3151,
+    "sectionId": 9542,
+    "sectionName": "Other Information",
+    "answers": [
+      {
+        "questionId": 1197391,
+        "label": "Please list the cities, states and countries where you have lived, with years of residence.  Please list each location on a separate line with dates following (e.g., City, State, Country, mm/yyyy - mm/yyyy).",
+        "sent": "POC6-Harvard -q1197391",
+        "got": "POC6-Harvard -q1197391",
+        "answerIdAfter": 434349913,
+        "match": true
+      },
+      {
+        "questionId": 1227623,
+        "label": "Please list additional location and date if applicable.",
+        "sent": "POC6-Harvard -q1227623",
+        "got": "POC6-Harvard -q1227623",
+        "answerIdAfter": 434349914,
+        "match": true
+      }
+    ]
+  },
+  {
+    "tier": "perCollege",
+    "college": "Yale University",
+    "memberId": 308,
+    "screen": "Questions",
+    "screenId": 2611,
+    "sectionId": 7482,
+    "sectionName": "Academics",
+    "answers": [
+      {
+        "questionId": 1399551,
+        "label": "If you experienced a significant challenge associated with preparing for or completing the standardized test(s) you selected, you may provide details here. (100 word limit).",
+        "sent": "POC6-Yale Uni-q1399551",
+        "got": "POC6-Yale Uni-q1399551",
+        "answerIdAfter": 434349923,
+        "match": true
+      },
+      {
+        "questionId": 1200549,
+        "label": "Include scores from any additional standardized tests you wish to have considered (e.g. A-Levels, AIME, school leaving certificates). If your school makes predictions for A-Level or IB exams, note them here.&nbsp; Provide the name, score, and date (month and year) you completed or will complete the test.",
+        "sent": "POC6-Yale Uni-q1200549",
+        "got": "POC6-Yale Uni-q1200549",
+        "answerIdAfter": 434349924,
+        "match": true
+      }
+    ]
+  },
+  {
+    "tier": "perCollege",
+    "college": "Yale University",
+    "memberId": 308,
+    "screen": "Questions",
+    "screenId": 2611,
+    "sectionId": 14761,
+    "sectionName": "Short Takes and Essays",
+    "answers": [
+      {
+        "questionId": 1197386,
+        "label": "<strong>Short Takes</strong><br><br>Please respond in no more than <strong>200 characters</strong> (approximately 35 words or fewer), to each of the following questions:&nbsp;<br><br>1. What inspires you?",
+        "sent": "POC6-Yale Uni-q1197386",
+        "got": "POC6-Yale Uni-q1197386",
+        "answerIdAfter": 434349928,
+        "match": true
+      },
+      {
+        "questionId": 1197388,
+        "label": "2. If you could teach any college course, write a book, or create an original piece of art of any kind, what would it be?",
+        "sent": "POC6-Yale Uni-q1197388",
+        "got": "POC6-Yale Uni-q1197388",
+        "answerIdAfter": 434349929,
+        "match": true
+      }
+    ]
+  },
+  {
+    "tier": "perCollege",
+    "college": "Stanford University",
+    "memberId": 327,
+    "screen": "Questions",
+    "screenId": 3900,
+    "sectionId": 12228,
+    "sectionName": "General",
+    "answers": [
+      {
+        "questionId": 1361293,
+        "label": "City of birth",
+        "sent": "POC6-Stanford-q1361293",
+        "got": "POC6-Stanford-q1361293",
+        "answerIdAfter": 434349930,
+        "match": true
+      }
+    ]
+  }
+]
