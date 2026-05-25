@@ -1,0 +1,106 @@
+- generic [ref=e3]:
+  - link "Skip to main content" [ref=e4] [cursor=pointer]:
+    - /url: "#main-content"
+  - banner [ref=e5]:
+    - generic [ref=e6]:
+      - img "College Insight" [ref=e9] [cursor=pointer]
+      - navigation "Main navigation" [ref=e10]:
+        - generic [ref=e11] [cursor=pointer]:
+          - img "home" [ref=e12]
+          - text: Home
+        - generic [ref=e15] [cursor=pointer]:
+          - generic [ref=e16]: 🧭
+          - text: My Compass
+        - generic [ref=e17] [cursor=pointer]:
+          - generic [ref=e18]: 🏫
+          - text: My College
+          - img [ref=e19]
+        - generic [ref=e21] [cursor=pointer]:
+          - generic [ref=e22]: 📝
+          - text: My Plan
+          - img [ref=e23]
+        - generic [ref=e25] [cursor=pointer]:
+          - generic [ref=e26]: 📖
+          - text: My Guide
+          - img [ref=e27]
+        - generic [ref=e29] [cursor=pointer]:
+          - img "info-circle" [ref=e30]
+          - text: About
+          - img [ref=e34]
+          - generic
+      - generic [ref=e38] [cursor=pointer]:
+        - img "user" [ref=e41]:
+          - img [ref=e42]
+        - img "down" [ref=e44]:
+          - img [ref=e45]
+  - main [ref=e47]:
+    - main [ref=e48]:
+      - generic [ref=e51]:
+        - status [ref=e52]: No grade selected. Tap a compass cardinal to see that grade's priorities.
+        - button "Try It Free — 60s college fit check" [ref=e53] [cursor=pointer]: Try It Free — 60s college fit check
+        - generic [ref=e55]:
+          - generic
+        - generic [ref=e56]:
+          - radiogroup "Select roadmap grade" [ref=e57]
+          - button "play-circle See demo" [ref=e70] [cursor=pointer]
+          - paragraph
+        - generic:
+          - generic [ref=e77]
+          - button "Open roadmap intro" [ref=e102] [cursor=pointer]
+        - complementary "How to read this map":
+          - paragraph
+          - list
+      - generic [ref=e112]:
+        - button "Share" [ref=e114] [cursor=pointer]:
+          - img "like" [ref=e116]
+        - button "Contact us" [ref=e119] [cursor=pointer]:
+          - img "question" [ref=e121]
+        - button "Invite a Friend" [ref=e124] [cursor=pointer]:
+          - img "gift" [ref=e126]
+        - button "Chat with AI Consultant" [ref=e129] [cursor=pointer]:
+          - img "message" [ref=e131]
+        - button "Quick Navigator" [ref=e134] [cursor=pointer]:
+          - img "compass" [ref=e136]
+  - contentinfo "Site footer" [ref=e141]:
+    - generic [ref=e142]:
+      - generic [ref=e143]:
+        - heading "Plan" [level=4] [ref=e144]
+        - generic [ref=e145]:
+          - button "College Fit" [ref=e147] [cursor=pointer]
+          - button "Course Planning" [ref=e150] [cursor=pointer]
+          - button "Activity Planning" [ref=e153] [cursor=pointer]
+          - button "Test Planning" [ref=e156] [cursor=pointer]
+          - button "Opportunities" [ref=e159] [cursor=pointer]
+          - button "Financial Planning" [ref=e162] [cursor=pointer]
+      - generic [ref=e164]:
+        - heading "Apply" [level=4] [ref=e165]
+        - generic [ref=e166]:
+          - button "Application Prep" [ref=e168] [cursor=pointer]
+          - button "Checklist" [ref=e171] [cursor=pointer]
+          - button "Timeline" [ref=e174] [cursor=pointer]
+          - button "Essays" [ref=e177] [cursor=pointer]
+          - button "College Playbook" [ref=e180] [cursor=pointer]
+          - generic [ref=e182]
+      - generic [ref=e186]:
+        - heading "Explore" [level=4] [ref=e187]
+        - generic [ref=e188]:
+          - button "College List" [ref=e190] [cursor=pointer]
+          - button "Compare Colleges" [ref=e193] [cursor=pointer]
+          - button "College Profile" [ref=e196] [cursor=pointer]
+          - button "Major & Career" [ref=e199] [cursor=pointer]
+          - button "My Compass" [ref=e202] [cursor=pointer]
+          - button "Path to College" [ref=e205] [cursor=pointer]
+      - generic [ref=e207]:
+        - heading "Learn & Account" [level=4] [ref=e208]
+        - generic [ref=e209]:
+          - button "Insight" [ref=e211] [cursor=pointer]
+          - button "Spotlight" [ref=e214] [cursor=pointer]
+          - button "Academy" [ref=e217] [cursor=pointer]
+          - button "Career" [ref=e220] [cursor=pointer]
+          - button "About" [ref=e223] [cursor=pointer]
+          - button "Contact" [ref=e226] [cursor=pointer]
+          - button "Privacy Policy" [ref=e229] [cursor=pointer]
+          - button "Terms of Service" [ref=e232] [cursor=pointer]
+      - generic [ref=e235]:
+        - img "College Insight" [ref=e238]
+        - heading "© 2023–2026 College Match LLC. All Rights Reserved." [level=3] [ref=e240]

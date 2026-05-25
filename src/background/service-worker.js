@@ -175,18 +175,27 @@ function validateNonce(tabId, nonce) {
   return "ok";
 }
 
-// Promise-returning membership probe (reuses CI_GET_MEMBER_STATUS cache).
-async function probeMembership() {
+// Promise-returning wallet probe (reuses CI_GET_MEMBER_STATUS cache).
+// MB-5 task 2.13: in PAYG the bypass requires a positive point balance,
+// not a premium-tier flag. Endpoint is unchanged (still returns `member`
+// for legacy callers; `pointBalance` is the authoritative field now).
+async function probePoints() {
   const cached = getCached("memberStatus");
   if (cached) return cached;
   try {
     const data = await ciApiFetch("user/memberStatus");
-    const result = { isPremium: data?.member > 0, member: data?.member || 0 };
+    const balance =
+      typeof data?.pointBalance === "number" ? data.pointBalance : 0;
+    const result = {
+      hasPoints: balance > 0,
+      pointBalance: balance,
+      member: data?.member || 0,
+    };
     setCache("memberStatus", result);
     return result;
   } catch (err) {
     swTrackEvent("agent.member_check.error", { error: err.message });
-    return { isPremium: false, member: 0, error: err.message };
+    return { hasPoints: false, pointBalance: 0, member: 0, error: err.message };
   }
 }
 
@@ -451,16 +460,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: false, code: nonceCheck, error: nonceCheck });
         return false;
       }
-      probeMembership().then((status) => {
-        if (!status.isPremium) {
+      probePoints().then((status) => {
+        if (!status.hasPoints) {
           swTrackEvent("agent.ca.bypass_blocked", {
-            code: "not_premium",
+            code: "no_points",
             messageType: message.type,
+            pointBalance: status.pointBalance,
           });
           sendResponse({
             success: false,
-            code: "premium_required",
-            error: "premium_required",
+            code: "insufficient_points",
+            error: "insufficient_points",
           });
           return;
         }

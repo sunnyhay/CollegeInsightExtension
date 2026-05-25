@@ -1,0 +1,242 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - link "Skip to main content" [ref=e4] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=e5]:
+      - generic [ref=e6]:
+        - img "College Insight" [ref=e9] [cursor=pointer]
+        - navigation "Main navigation" [ref=e10]:
+          - generic [ref=e11] [cursor=pointer]:
+            - img "home" [ref=e12]:
+              - img [ref=e13]
+            - text: Home
+          - generic [ref=e15] [cursor=pointer]:
+            - generic [ref=e16]: 🧭
+            - text: My Compass
+          - generic [ref=e17] [cursor=pointer]:
+            - generic [ref=e18]: 🏫
+            - text: My College
+            - img [ref=e19]
+          - generic [ref=e21] [cursor=pointer]:
+            - generic [ref=e22]: 📝
+            - text: My Plan
+            - img [ref=e23]
+          - generic [ref=e25] [cursor=pointer]:
+            - generic [ref=e26]: 📖
+            - text: My Guide
+            - img [ref=e27]
+          - generic [ref=e29] [cursor=pointer]:
+            - img "info-circle" [ref=e30]:
+              - img [ref=e31]
+            - text: About
+            - img [ref=e34]
+            - generic:
+              - generic:
+                - generic: Career
+                - generic: About Us
+                - generic: Contact Us
+                - generic: Privacy Policy
+                - generic: Terms of Service
+        - generic [ref=e38] [cursor=pointer]:
+          - img "user" [ref=e41]:
+            - img [ref=e42]
+          - img "down" [ref=e44]:
+            - img [ref=e45]
+    - main [ref=e47]:
+      - main [ref=e48]:
+        - generic [ref=e51]:
+          - status [ref=e52]: No grade selected. Tap a compass cardinal to see that grade's priorities.
+          - generic [ref=e55]:
+            - generic:
+              - generic:
+                - img
+                - generic:
+                  - generic: Welcome! Explore the stars above
+                  - generic: Every star above is a feature — hover to peek, click to dive in. Pick a grade on the compass to see what matters this year, or click the moon for a guided tour.
+          - generic [ref=e56]:
+            - radiogroup "Select roadmap grade" [ref=e57]:
+              - img
+              - radio "9th grade — N" [ref=e58] [cursor=pointer]:
+                - generic [ref=e59]: "N"
+                - generic [ref=e60]: 9th
+              - radio "10th grade — E" [ref=e61] [cursor=pointer]:
+                - generic [ref=e62]: E
+                - generic [ref=e63]: 10th
+              - radio "11th grade — S" [ref=e64] [cursor=pointer]:
+                - generic [ref=e65]: S
+                - generic [ref=e66]: 11th
+              - radio "12th grade — W" [ref=e67] [cursor=pointer]:
+                - generic [ref=e68]: W
+                - generic [ref=e69]: 12th
+            - button "play-circle See demo" [ref=e70] [cursor=pointer]:
+              - img "play-circle" [ref=e72]:
+                - img [ref=e73]
+              - generic [ref=e76]: See demo
+            - paragraph:
+              - text: Tap
+              - strong: N / E / S / W
+              - text: to enter that grade's roadmap. Tap the same cardinal again to return here.
+          - generic:
+            - generic [ref=e77]:
+              - img
+              - group "Top priorities for this grade" [ref=e78]:
+                - heading "Top priorities for this grade" [level=3] [ref=e79]
+                - button "Profile" [ref=e80] [cursor=pointer]
+                - generic: Profile
+                - button "Financial Planning" [ref=e81] [cursor=pointer]
+                - generic: Financial Planning
+                - button "Course Planning" [ref=e82] [cursor=pointer]
+                - generic: Course Planning
+                - button "Activity Planning" [ref=e83] [cursor=pointer]
+                - generic: Activity Planning
+                - button "Test Planning" [ref=e84] [cursor=pointer]
+                - generic: Test Planning
+                - button "Major & Career" [ref=e85] [cursor=pointer]
+                - generic: Major & Career
+                - button "Path to College" [ref=e86] [cursor=pointer]
+                - generic: Path to College
+                - button "Fit" [ref=e87] [cursor=pointer]
+                - generic: Fit
+                - button "College List" [ref=e88] [cursor=pointer]
+                - generic: College List
+              - group "Active work for this grade" [ref=e89]:
+                - heading "Active work for this grade" [level=3] [ref=e90]
+                - button "Opportunities" [ref=e91] [cursor=pointer]
+                - generic: Opportunities
+                - button "Explore" [ref=e92] [cursor=pointer]
+                - generic: Explore
+                - button "Compare" [ref=e93] [cursor=pointer]
+                - generic: Compare
+                - button "Application Prep" [ref=e94] [cursor=pointer]
+                - generic: Application Prep
+              - group "Background or future-only for this grade" [ref=e95]:
+                - heading "Background or future-only for this grade" [level=3] [ref=e96]
+                - button "Insight" [ref=e97] [cursor=pointer]
+                - generic: Insight
+                - button "Spotlight" [ref=e98] [cursor=pointer]
+                - generic: Spotlight
+                - button "Academy" [ref=e99] [cursor=pointer]
+                - generic: Academy
+                - button "Post-Admission" [ref=e100] [cursor=pointer]
+                - generic: Post-Admission
+            - button "Open roadmap intro" [ref=e102] [cursor=pointer]:
+              - img [ref=e103]
+              - generic [ref=e110]: Begin
+          - complementary "How to read this map":
+            - paragraph:
+              - strong: How to read this map.
+              - text: The moon at the center is your wayfinder; each star sits on one of three orbits by priority — and which tools land on which orbit shifts as you advance through high school.
+            - list:
+              - listitem:
+                - generic: 🌙
+                - generic: Center moon · Wayfinder
+              - listitem:
+                - generic: Inner · Top priority now
+              - listitem:
+                - generic: Middle · Active work
+              - listitem:
+                - generic: Outer · Later or background
+        - generic [ref=e112]:
+          - button "Share" [ref=e114] [cursor=pointer]:
+            - img "like" [ref=e116]:
+              - img [ref=e117]
+          - button "Contact us" [ref=e119] [cursor=pointer]:
+            - img "question" [ref=e121]:
+              - img [ref=e122]
+          - button "Invite a Friend" [ref=e124] [cursor=pointer]:
+            - img "gift" [ref=e126]:
+              - img [ref=e127]
+          - button "Chat with AI Consultant" [ref=e129] [cursor=pointer]:
+            - img "message" [ref=e131]:
+              - img [ref=e132]
+          - button "Quick Navigator" [ref=e134] [cursor=pointer]:
+            - img "compass" [ref=e136]:
+              - img [ref=e137]
+    - contentinfo "Site footer" [ref=e141]:
+      - generic [ref=e142]:
+        - generic [ref=e143]:
+          - heading "Plan" [level=4] [ref=e144]
+          - generic [ref=e145]:
+            - button "College Fit" [ref=e147] [cursor=pointer]:
+              - generic [ref=e148]: College Fit
+            - button "Course Planning" [ref=e150] [cursor=pointer]:
+              - generic [ref=e151]: Course Planning
+            - button "Activity Planning" [ref=e153] [cursor=pointer]:
+              - generic [ref=e154]: Activity Planning
+            - button "Test Planning" [ref=e156] [cursor=pointer]:
+              - generic [ref=e157]: Test Planning
+            - button "Opportunities" [ref=e159] [cursor=pointer]:
+              - generic [ref=e160]: Opportunities
+            - button "Financial Planning" [ref=e162] [cursor=pointer]:
+              - generic [ref=e163]: Financial Planning
+        - generic [ref=e164]:
+          - heading "Apply" [level=4] [ref=e165]
+          - generic [ref=e166]:
+            - button "Application Prep" [ref=e168] [cursor=pointer]:
+              - generic [ref=e169]: Application Prep
+            - button "Checklist" [ref=e171] [cursor=pointer]:
+              - generic [ref=e172]: Checklist
+            - button "Timeline" [ref=e174] [cursor=pointer]:
+              - generic [ref=e175]: Timeline
+            - button "Essays" [ref=e177] [cursor=pointer]:
+              - generic [ref=e178]: Essays
+            - button "College Playbook" [ref=e180] [cursor=pointer]:
+              - generic [ref=e181]: College Playbook
+            - generic [ref=e182]:
+              - button "Post-Admission" [ref=e183] [cursor=pointer]:
+                - generic [ref=e184]: Post-Admission
+              - generic [ref=e185]: Preview
+        - generic [ref=e186]:
+          - heading "Explore" [level=4] [ref=e187]
+          - generic [ref=e188]:
+            - button "College List" [ref=e190] [cursor=pointer]:
+              - generic [ref=e191]: College List
+            - button "Compare Colleges" [ref=e193] [cursor=pointer]:
+              - generic [ref=e194]: Compare Colleges
+            - button "College Profile" [ref=e196] [cursor=pointer]:
+              - generic [ref=e197]: College Profile
+            - button "Major & Career" [ref=e199] [cursor=pointer]:
+              - generic [ref=e200]: Major & Career
+            - button "My Compass" [ref=e202] [cursor=pointer]:
+              - generic [ref=e203]: My Compass
+            - button "Path to College" [ref=e205] [cursor=pointer]:
+              - generic [ref=e206]: Path to College
+        - generic [ref=e207]:
+          - heading "Learn & Account" [level=4] [ref=e208]
+          - generic [ref=e209]:
+            - button "Insight" [ref=e211] [cursor=pointer]:
+              - generic [ref=e212]: Insight
+            - button "Spotlight" [ref=e214] [cursor=pointer]:
+              - generic [ref=e215]: Spotlight
+            - button "Academy" [ref=e217] [cursor=pointer]:
+              - generic [ref=e218]: Academy
+            - button "Career" [ref=e220] [cursor=pointer]:
+              - generic [ref=e221]: Career
+            - button "About" [ref=e223] [cursor=pointer]:
+              - generic [ref=e224]: About
+            - button "Contact" [ref=e226] [cursor=pointer]:
+              - generic [ref=e227]: Contact
+            - button "Privacy Policy" [ref=e229] [cursor=pointer]:
+              - generic [ref=e230]: Privacy Policy
+            - button "Terms of Service" [ref=e232] [cursor=pointer]:
+              - generic [ref=e233]: Terms of Service
+        - generic [ref=e235]:
+          - img "College Insight" [ref=e238]
+          - heading "© 2023–2026 College Match LLC. All Rights Reserved." [level=3] [ref=e240]
+  - generic [ref=e241]:
+    - dialog:
+      - generic [ref=e242]:
+        - button "Close" [active] [ref=e243] [cursor=pointer]:
+          - generic "Close" [ref=e244]:
+            - img "close" [ref=e245]:
+              - img [ref=e246]
+        - generic [ref=e249]:
+          - banner [ref=e250]:
+            - heading "Profile" [level=2] [ref=e251]:
+              - generic [ref=e252]: 📄
+              - generic [ref=e253]: Profile
+            - paragraph [ref=e254]: ✨ Overview
+          - paragraph [ref=e257]: Profile
+          - contentinfo [ref=e258]:
+            - link "Open Profile →" [ref=e259] [cursor=pointer]:
+              - /url: /profile
