@@ -6,3 +6,6 @@ dist/
 .env.local
 test-results/
 .playwright-mcp/
+
+# Local session recovery dumps (may contain secrets)
+docs/recovered-sessions/
