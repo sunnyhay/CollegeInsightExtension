@@ -1,5 +1,15 @@
 # Phase 1 #1 — Packed-Extension Verification Checklist
 
+> **⚠️ Partially obsolete — premium-gate steps no longer apply**
+>
+> The membership / premium-gate test steps in this checklist (any reference to
+> `premium_required` response codes, `not_premium` telemetry codes, "test user not flagged
+> as premium in local DB", or the premium-gating side of the SW gate) describe the
+> deprecated tiered-membership product. The PAYG migration retired premium gating; the
+> per-tab nonce gate (`no_nonce` / `bad_nonce`) is still active and the rest of the
+> checklist (extension load, SW boot, content-script injection, message routing, API key
+> extractor, capture/refresh telemetry) still applies. Ignore premium-only steps.
+
 > Manual smoke test for `docs/gen6/APPLICATION_ACCELERATOR_DESIGN.md` Phase 1 #1.
 > This is the only Phase 1 task that cannot be exercised programmatically (it
 > requires loading the unpacked extension into a real Chrome profile and

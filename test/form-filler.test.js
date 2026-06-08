@@ -124,11 +124,7 @@ describe("fill entry points — path D routing for common_app (Phase 3 #15)", ()
     };
     const sandboxChrome = {
       runtime: {
-        sendMessage: (msg, cb) => {
-          if (msg && msg.type === "CI_GET_MEMBER_STATUS") {
-            cb({ isPremium: true });
-            return;
-          }
+        sendMessage: (_msg, cb) => {
           cb({ ok: true });
         },
         onMessage: { addListener: () => {} },
@@ -424,43 +420,5 @@ describe("fill-all abort flag behavior", () => {
     expect(result.success).toBe(false);
     expect(result.reason).toBe("aborted");
     expect(result.filled).toBe(0);
-  });
-});
-
-// ── Premium Gate Tests ─────────────────────────────────────────────────────────
-
-describe("fillCurrentSection premium gate", () => {
-  it("should return premium_required when member status check returns not premium", () => {
-    const memberStatus = { isPremium: false, member: 0 };
-    const result = !memberStatus.isPremium
-      ? {
-          success: false,
-          reason: "premium_required",
-          message:
-            "Auto-fill is a premium feature. Subscribe at CollegeInsight.ai to unlock.",
-        }
-      : null;
-
-    expect(result.success).toBe(false);
-    expect(result.reason).toBe("premium_required");
-    expect(result.message).toContain("premium feature");
-  });
-
-  it("should allow fill when member status returns premium", () => {
-    const memberStatus = { isPremium: true, member: 1 };
-    const shouldBlock = !memberStatus.isPremium;
-    expect(shouldBlock).toBe(false);
-  });
-
-  it("should fail-open when member check throws error", () => {
-    // If the member check fails, we allow fill (fail-open for existing users)
-    let shouldBlock = false;
-    try {
-      throw new Error("Network error");
-    } catch {
-      // fail-open: don't block on error
-      shouldBlock = false;
-    }
-    expect(shouldBlock).toBe(false);
   });
 });

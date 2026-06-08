@@ -1,0 +1,186 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - link "Skip to main content" [ref=e4] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=e5]:
+      - generic [ref=e6]:
+        - img "College Insight" [ref=e9] [cursor=pointer]
+        - navigation "Main navigation" [ref=e10]:
+          - generic [ref=e11] [cursor=pointer]:
+            - img "home" [ref=e12]:
+              - img [ref=e13]
+            - text: Home
+          - generic [ref=e15] [cursor=pointer]:
+            - generic [ref=e16]: 🧭
+            - text: My Compass
+          - generic [ref=e17] [cursor=pointer]:
+            - generic [ref=e18]: 🏫
+            - text: My College
+            - img [ref=e19]
+          - generic [ref=e21] [cursor=pointer]:
+            - generic [ref=e22]: 📝
+            - text: My Plan
+            - img [ref=e23]
+          - generic [ref=e25] [cursor=pointer]:
+            - generic [ref=e26]: 📖
+            - text: My Guide
+            - img [ref=e27]
+          - generic [ref=e29] [cursor=pointer]:
+            - img "info-circle" [ref=e30]:
+              - img [ref=e31]
+            - text: About
+            - img [ref=e34]
+            - generic:
+              - generic:
+                - generic: About Us
+                - generic: Contact Us
+                - generic: Privacy Policy
+                - generic: Terms of Service
+        - generic [ref=e37]:
+          - button "Log In" [ref=e39] [cursor=pointer]:
+            - generic [ref=e40]: Log In
+          - button "Sign Up" [ref=e42] [cursor=pointer]:
+            - generic [ref=e43]: Sign Up
+    - main [ref=e44]:
+      - main [ref=e45]:
+        - generic [ref=e321]:
+          - navigation [ref=e323]:
+            - list [ref=e324]:
+              - listitem [ref=e325]:
+                - link "Home" [ref=e327] [cursor=pointer]:
+                  - /url: /
+              - listitem [ref=e328]: ">"
+              - listitem [ref=e329]:
+                - link "Log In" [ref=e331] [cursor=pointer]:
+                  - /url: /login
+          - generic [ref=e332]:
+            - generic [ref=e333]:
+              - generic [ref=e334]:
+                - heading "Welcome back" [level=1] [ref=e335]
+                - paragraph [ref=e336]: Pick up where you left off with your matched colleges, saved lists, and planning insights.
+              - generic [ref=e337]:
+                - generic [ref=e343]:
+                  - textbox [ref=e345]:
+                    - /placeholder: " "
+                  - generic: Email
+                - generic [ref=e352]:
+                  - generic [ref=e353]:
+                    - textbox [ref=e354]:
+                      - /placeholder: " "
+                    - img "eye-invisible" [ref=e356] [cursor=pointer]:
+                      - img [ref=e357]
+                  - generic: Password
+                - generic [ref=e365]:
+                  - button "login Sign In" [ref=e366] [cursor=pointer]:
+                    - img "login" [ref=e368]:
+                      - img [ref=e369]
+                    - generic [ref=e371]: Sign In
+                  - button "mail Email me a sign-in link" [ref=e372] [cursor=pointer]:
+                    - img "mail" [ref=e374]:
+                      - img [ref=e375]
+                    - generic [ref=e377]: Email me a sign-in link
+                  - button "Forgot password?" [ref=e378] [cursor=pointer]:
+                    - generic [ref=e379]: Forgot password?
+              - generic [ref=e380]:
+                - generic [ref=e381]: Need an account?
+                - button "Sign Up" [ref=e382] [cursor=pointer]:
+                  - generic [ref=e383]: Sign Up
+            - generic [ref=e384]:
+              - generic [ref=e385]:
+                - heading "Sign in with a provider" [level=2] [ref=e386]
+                - paragraph [ref=e387]: Use a connected account and access your dashboard instantly.
+              - generic [ref=e388]:
+                - button "Sign in with Google" [ref=e390] [cursor=pointer]:
+                  - img "google" [ref=e392]:
+                    - img [ref=e393]
+                  - generic [ref=e395]: Sign in with Google
+                - button "Sign in with Apple" [ref=e397] [cursor=pointer]:
+                  - img "apple" [ref=e399]:
+                    - img [ref=e400]
+                  - generic [ref=e402]: Sign in with Apple
+              - generic [ref=e405]:
+                - link "Terms of Service" [ref=e407] [cursor=pointer]:
+                  - /url: /terms
+                  - generic [ref=e408]: Terms of Service
+                - generic [ref=e409]: "|"
+                - link "Privacy Policy" [ref=e411] [cursor=pointer]:
+                  - /url: /privacy
+                  - generic [ref=e412]: Privacy Policy
+        - generic [ref=e57]:
+          - button "Share" [ref=e59] [cursor=pointer]:
+            - img "like" [ref=e61]:
+              - img [ref=e62]
+          - button "Contact us" [ref=e64] [cursor=pointer]:
+            - img "question" [ref=e66]:
+              - img [ref=e67]
+          - button "Invite a Friend" [active] [ref=e69] [cursor=pointer]:
+            - img "gift" [ref=e71]:
+              - img [ref=e72]
+          - button "Chat with AI Consultant" [ref=e74] [cursor=pointer]:
+            - img "message" [ref=e76]:
+              - img [ref=e77]
+          - button "Quick Navigator" [ref=e79] [cursor=pointer]:
+            - img "compass" [ref=e81]:
+              - img [ref=e82]
+    - contentinfo "Site footer" [ref=e86]:
+      - generic [ref=e87]:
+        - generic [ref=e88]:
+          - heading "My College" [level=4] [ref=e89]
+          - generic [ref=e90]:
+            - button "College Fit" [ref=e92] [cursor=pointer]:
+              - generic [ref=e93]: College Fit
+            - button "Path to College" [ref=e95] [cursor=pointer]:
+              - generic [ref=e96]: Path to College
+            - button "Financial Planning" [ref=e98] [cursor=pointer]:
+              - generic [ref=e99]: Financial Planning
+            - button "College List" [ref=e101] [cursor=pointer]:
+              - generic [ref=e102]: College List
+            - button "College Profile" [ref=e104] [cursor=pointer]:
+              - generic [ref=e105]: College Profile
+            - button "Major & Career" [ref=e107] [cursor=pointer]:
+              - generic [ref=e108]: Major & Career
+            - button "Compare Colleges" [ref=e110] [cursor=pointer]:
+              - generic [ref=e111]: Compare Colleges
+        - generic [ref=e112]:
+          - heading "My Plan" [level=4] [ref=e113]
+          - generic [ref=e114]:
+            - button "Course Planning" [ref=e116] [cursor=pointer]:
+              - generic [ref=e117]: Course Planning
+            - button "Activity Planning" [ref=e119] [cursor=pointer]:
+              - generic [ref=e120]: Activity Planning
+            - button "Test Planning" [ref=e122] [cursor=pointer]:
+              - generic [ref=e123]: Test Planning
+            - button "Opportunities" [ref=e125] [cursor=pointer]:
+              - generic [ref=e126]: Opportunities
+            - button "Application Prep" [ref=e128] [cursor=pointer]:
+              - generic [ref=e129]: Application Prep
+            - generic [ref=e130]:
+              - button "Post-Admission" [ref=e131] [cursor=pointer]:
+                - generic [ref=e132]: Post-Admission
+              - generic [ref=e133]: Preview
+        - generic [ref=e134]:
+          - heading "My Guide" [level=4] [ref=e135]
+          - generic [ref=e136]:
+            - button "My Compass" [ref=e138] [cursor=pointer]:
+              - generic [ref=e139]: My Compass
+            - button "Insight" [ref=e141] [cursor=pointer]:
+              - generic [ref=e142]: Insight
+            - button "Spotlight" [ref=e144] [cursor=pointer]:
+              - generic [ref=e145]: Spotlight
+            - button "Academy" [ref=e147] [cursor=pointer]:
+              - generic [ref=e148]: Academy
+        - generic [ref=e149]:
+          - heading "About" [level=4] [ref=e150]
+          - generic [ref=e151]:
+            - button "About" [ref=e153] [cursor=pointer]:
+              - generic [ref=e154]: About
+            - button "Contact" [ref=e156] [cursor=pointer]:
+              - generic [ref=e157]: Contact
+            - button "Privacy Policy" [ref=e159] [cursor=pointer]:
+              - generic [ref=e160]: Privacy Policy
+            - button "Terms of Service" [ref=e162] [cursor=pointer]:
+              - generic [ref=e163]: Terms of Service
+        - generic [ref=e165]:
+          - img "College Insight" [ref=e168]
+          - heading "© 2023–2026 College Match LLC. All Rights Reserved." [level=3] [ref=e170]
+  - tooltip "Invite a Friend" [ref=e320]

@@ -99,13 +99,13 @@ can A/B compare auto-fill vs. manual-fill cohorts.
 ### `agent.ca.bypass_blocked`
 
 **Where:** [`src/background/service-worker.js`](../src/background/service-worker.js) — `CI_CA_*` handler.
-**When:** A page tried to use the Common App bridge without satisfying the membership gate or nonce check.
-**Purpose:** Detect attempted bypass of the premium-only gate.
+**When:** A page tried to use the Common App bridge without satisfying the nonce check.
+**Purpose:** Detect attempted bypass of the per-tab nonce gate.
 
-| Prop          | Type   | Notes                                                                                                                                             |
-| ------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `code`        | string | `not_premium` \| `no_nonce` \| `bad_nonce` (matches APPLICATION_ACCELERATOR_DESIGN.md Phase 1 #1.7; user-facing response uses `premium_required`) |
-| `messageType` | string | The blocked `CI_CA_*` message type                                                                                                                |
+| Prop          | Type   | Notes                                                                                                                                                                                  |
+| ------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `code`        | string | `no_nonce` \| `bad_nonce` (PAYG: the historical `not_premium` code — and the user-facing `premium_required` response — were retired with the membership product; nonce gate remains.) |
+| `messageType` | string | The blocked `CI_CA_*` message type                                                                                                                                                     |
 
 ---
 

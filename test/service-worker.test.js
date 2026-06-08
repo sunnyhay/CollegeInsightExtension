@@ -258,8 +258,8 @@ describe("service-worker — Phase 1 #1.7 CI_CA_* gate", () => {
     expect(resp).toEqual({ success: false });
   });
 
-  it("blocks valid-nonce non-premium callers with not_premium → premium_required", async () => {
-    const { listener, getEvents, tabSendMessage } = bootSW({
+  it("forwards valid-nonce calls regardless of membership (premium gate removed)", async () => {
+    const { listener, tabSendMessage } = bootSW({
       memberStatus: { member: 0 },
     });
     await callListener(
@@ -272,16 +272,8 @@ describe("service-worker — Phase 1 #1.7 CI_CA_* gate", () => {
       { type: "CI_CA_SAVE_ANSWERS", nonce: VALID_NONCE },
       { tab: { id: 5 } },
     );
-    expect(resp).toEqual({
-      success: false,
-      code: "premium_required",
-      error: "premium_required",
-    });
-    expect(tabSendMessage).not.toHaveBeenCalled();
-    const blocks = getEvents().filter(
-      (e) => e.name === "agent.ca.bypass_blocked",
-    );
-    expect(blocks.some((e) => e.properties.code === "not_premium")).toBe(true);
+    expect(resp.success).toBe(true);
+    expect(tabSendMessage).toHaveBeenCalledTimes(1);
   });
 
   it("forwards valid-nonce premium calls to the Common App tab via chrome.tabs.sendMessage", async () => {

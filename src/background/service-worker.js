@@ -175,30 +175,6 @@ function validateNonce(tabId, nonce) {
   return "ok";
 }
 
-// Promise-returning wallet probe (reuses CI_GET_MEMBER_STATUS cache).
-// MB-5 task 2.13: in PAYG the bypass requires a positive point balance,
-// not a premium-tier flag. Endpoint is unchanged (still returns `member`
-// for legacy callers; `pointBalance` is the authoritative field now).
-async function probePoints() {
-  const cached = getCached("memberStatus");
-  if (cached) return cached;
-  try {
-    const data = await ciApiFetch("user/memberStatus");
-    const balance =
-      typeof data?.pointBalance === "number" ? data.pointBalance : 0;
-    const result = {
-      hasPoints: balance > 0,
-      pointBalance: balance,
-      member: data?.member || 0,
-    };
-    setCache("memberStatus", result);
-    return result;
-  } catch (err) {
-    swTrackEvent("agent.member_check.error", { error: err.message });
-    return { hasPoints: false, pointBalance: 0, member: 0, error: err.message };
-  }
-}
-
 // -- Token management --
 
 async function getToken() {
@@ -267,29 +243,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ authenticated: !!token });
     });
     return true; // async response
-  }
-
-  if (message.type === "CI_GET_MEMBER_STATUS") {
-    const cacheKey = "memberStatus";
-    const cached = getCached(cacheKey);
-    if (cached) {
-      sendResponse({ success: true, ...cached, cached: true });
-      return true;
-    }
-    ciApiFetch("user/memberStatus")
-      .then((data) => {
-        const result = {
-          isPremium: data?.member > 0,
-          member: data?.member || 0,
-        };
-        setCache(cacheKey, result, 5 * 60 * 1000); // 5-min cache
-        sendResponse({ success: true, ...result });
-      })
-      .catch((err) => {
-        swTrackEvent("agent.member_check.error", { error: err.message });
-        sendResponse({ success: false, isPremium: false, error: err.message });
-      });
-    return true;
   }
 
   if (message.type === "CI_FETCH_COMPASS") {
@@ -444,10 +397,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // performs the fetch (api25 enforces an Origin allowlist; the SW can't call
   // it directly). See POC #4 in scripts/common-app/notes.md §3c.
   //
-  // Phase 1 #1.7: gate every non-ping CI_CA_* message on (a) a registered
-  // per-tab nonce and (b) premium membership. Without these, a non-premium
-  // user with the extension installed could post CI_CA_SAVE_ANSWERS directly
-  // via window.postMessage and bypass the Accelerator UI gate.
+  // Phase 1 #1.7: gate every non-ping CI_CA_* message on a registered per-tab
+  // nonce so a page without the Accelerator UI cannot post CI_CA_SAVE_ANSWERS
+  // directly via window.postMessage.
   if (message.type && message.type.startsWith("CI_CA_")) {
     if (!CI_CA_AUTH_FREE.has(message.type)) {
       const tabId = sender?.tab?.id;
@@ -460,32 +412,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: false, code: nonceCheck, error: nonceCheck });
         return false;
       }
-      probePoints().then((status) => {
-        if (!status.hasPoints) {
-          swTrackEvent("agent.ca.bypass_blocked", {
-            code: "no_points",
-            messageType: message.type,
-            pointBalance: status.pointBalance,
-          });
+      handleCommonAppBridge(message)
+        .then((result) => sendResponse(result))
+        .catch((err) =>
           sendResponse({
             success: false,
-            code: "insufficient_points",
-            error: "insufficient_points",
-          });
-          return;
-        }
-        handleCommonAppBridge(message)
-          .then((result) => sendResponse(result))
-          .catch((err) =>
-            sendResponse({
-              success: false,
-              error: String(err?.message || err),
-            }),
-          );
-      });
+            error: String(err?.message || err),
+          }),
+        );
       return true; // async
     }
-    // CI_CA_PING is allowlisted — used as a connection probe before nonce/membership are known.
+    // CI_CA_PING is allowlisted — used as a connection probe before nonce is known.
     handleCommonAppBridge(message)
       .then((result) => sendResponse(result))
       .catch((err) =>
