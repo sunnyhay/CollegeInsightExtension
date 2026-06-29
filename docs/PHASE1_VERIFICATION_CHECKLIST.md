@@ -1,15 +1,5 @@
 # Phase 1 #1 — Packed-Extension Verification Checklist
 
-> **⚠️ Partially obsolete — premium-gate steps no longer apply**
->
-> The membership / premium-gate test steps in this checklist (any reference to
-> `premium_required` response codes, `not_premium` telemetry codes, "test user not flagged
-> as premium in local DB", or the premium-gating side of the SW gate) describe the
-> deprecated tiered-membership product. The PAYG migration retired premium gating; the
-> per-tab nonce gate (`no_nonce` / `bad_nonce`) is still active and the rest of the
-> checklist (extension load, SW boot, content-script injection, message routing, API key
-> extractor, capture/refresh telemetry) still applies. Ignore premium-only steps.
-
 > Manual smoke test for `docs/gen6/APPLICATION_ACCELERATOR_DESIGN.md` Phase 1 #1.
 > This is the only Phase 1 task that cannot be exercised programmatically (it
 > requires loading the unpacked extension into a real Chrome profile and
@@ -113,21 +103,7 @@ chrome.runtime.sendMessage(
 
 **Expected SW telemetry:** `agent.ca.bypass_blocked { code: "no_nonce" }`.
 
-## Step 5 — Verify membership gate (Phase 1 #1.7)
-
-While the test account `collegematchinfo@gmail.com` is logged in, check
-`isPremium`. If it's currently **not premium**, the previous step's
-LIST_COLLEGES call should have returned `code: "premium_required"` instead
-of succeeding. Toggle membership in the local DB if needed:
-
-```sql
-UPDATE Users SET IsMember = 1 WHERE AuthId = 'Cb7HmuBRAtZrVvGbcJsdw79oRty1';
-```
-
-Confirm the SW emits `agent.ca.bypass_blocked { code: "not_premium" }` for
-the non-premium case.
-
-## Step 6 — Verify X-APi-Key extractor (Phase 1 #1.6)
+## Step 5 — Verify X-APi-Key extractor (Phase 1 #1.6)
 
 1. Open the Common App tab DevTools → Application → Local Storage →
    `chrome-extension://...` should NOT contain `caApiKey` if you haven't
@@ -150,7 +126,7 @@ chrome.storage.local.get(["caApiKey"], console.log);
 
 4. **Expected SW telemetry:** `agent.ca.apikey_extracted` with a `keyHash`.
 
-## Step 7 — End-to-end smoke (the headline scenario)
+## Step 6 — End-to-end smoke (the headline scenario)
 
 The minimum "Phase 1 done" demonstration:
 
@@ -169,7 +145,7 @@ console.log("Got colleges:", colleges);
 returned, telemetry events `agent.ca.fill { op: "list", success: true }` and
 optionally `agent.ca.refresh { success: true }` visible in the SW console.
 
-If all 7 steps pass, **Phase 1 #1 is verified**. Capture screenshots of the
+If all 6 steps pass, **Phase 1 #1 is verified**. Capture screenshots of the
 SW console output for the project record and update
 `docs/gen6/APPLICATION_ACCELERATOR_DESIGN.md` §1 Status to remove the
 "runtime integration not validated" caveat.
@@ -183,5 +159,4 @@ SW console output for the project record and update
 | `apikey_extraction_failed`                   | Common App bundle layout changed. Capture the new bundle in fixtures + bump regex.          |
 | `no_nonce` after a successful registration   | Tab id changed (extension reload, profile switch). Re-register.                             |
 | `device_revoked`                             | Common App invalidated the deviceKey. Sign out of Common App and back in.                   |
-| `premium_required`                           | Test user not flagged as premium in local DB. See Step 5.                                   |
 | SW console shows no events at all            | App Insights endpoint blocked by firewall — telemetry is non-blocking, ignore for the smoke |
