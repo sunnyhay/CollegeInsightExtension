@@ -42,11 +42,19 @@
   // gives headroom for future format drift.
   const KEY_VALIDATE_RE = /^[A-Za-z0-9]{20,40}$/;
 
-  // Match patterns for extracting the key from an Angular bundle. Multiple
-  // patterns let us tolerate minor minifier output drift; the first match wins.
+  // Match patterns for extracting the key from an Angular bundle. The
+  // authenticated api25 key is the config value assigned immediately after the
+  // api25 base URL, e.g.  ...api25.commonapp.org","apiKey":"<KEY>"  — this is
+  // the exact key Common App's own SPA sends on every authed /answer and
+  // /applicant call.
+  //
+  // CRITICAL (verified live 2026-07-04): do NOT match the `"X-API-Key":"..."`
+  // header *literal* elsewhere in the bundle. That is a DECOY key (it sits next
+  // to an `exportErrors` call); api25 REJECTS it with 403 on the authenticated
+  // endpoints, so extracting it makes every write fail (0 filled, all flagged).
+  // Real key `tYFvpgKw…` -> HTTP 200 validAnswers; decoy `YOxw0L2z…` -> 403.
   const EXTRACTION_PATTERNS = [
-    /["']X-APi-Key["']\s*:\s*["']([A-Za-z0-9]{20,40})["']/,
-    /X-APi-Key["']?\s*[:=]\s*["']([A-Za-z0-9]{20,40})["']/,
+    /api25\.commonapp\.org["']\s*,\s*["']?apiKey["']?\s*:\s*["']([A-Za-z0-9]{20,40})["']/,
   ];
 
   /** Pure: extract the X-APi-Key from a bundle source string. */

@@ -336,4 +336,47 @@ describe("common-app-broker — Phase 8 follow-up agent.ca.fill A/B parity", () 
       skippedCount: 0,
     });
   });
+
+  it("CA_ADD_COLLEGES surfaces a per-member isSuccess:false as a failure (not a phantom add)", async () => {
+    // Common App returns HTTP 200 with a per-member result array; adding by an
+    // invalid id (e.g. a unitid) yields isSuccess:false / addCollegeErrorType 4.
+    // The broker must treat that as a failure so the engine doesn't record a
+    // phantom "added" while My Colleges stays empty.
+    const { listener } = bootBroker({
+      apiResponse: [
+        {
+          memberId: 130794,
+          isSuccess: false,
+          addCollegeErrorType: 4,
+          memberName: null,
+        },
+      ],
+      storedSession: FAKE_SESSION,
+    });
+    const resp = await callListener(listener, {
+      type: "CA_ADD_COLLEGES",
+      memberIds: [130794],
+    });
+    expect(resp.success).toBe(false);
+    expect(String(resp.code || resp.error)).toContain("ca_add_rejected");
+  });
+
+  it("CA_ADD_COLLEGES succeeds when every member reports isSuccess:true", async () => {
+    const { listener } = bootBroker({
+      apiResponse: [
+        {
+          memberId: 308,
+          isSuccess: true,
+          addCollegeErrorType: 0,
+          memberName: "Yale University",
+        },
+      ],
+      storedSession: FAKE_SESSION,
+    });
+    const resp = await callListener(listener, {
+      type: "CA_ADD_COLLEGES",
+      memberIds: [308],
+    });
+    expect(resp.success).toBe(true);
+  });
 });

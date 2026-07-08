@@ -512,8 +512,6 @@ async function handleCommonAppBridge(message) {
   });
 }
 
-// -- Fill All orchestration --
-
 const PORTAL_URLS = {
   common_app: "https://apply.commonapp.org",
   uc_app: "https://apply.universityofcalifornia.edu",

@@ -26,25 +26,23 @@ function readFixture(name) {
 }
 
 describe("extractKeyFromBundle", () => {
-  it("extracts a quoted key from a typical bundle snippet", () => {
-    const src = readFixture("2026-04-29__synthetic-quoted__tYFvpg.snippet.js");
+  it("extracts the api25 config key, not the X-API-Key decoy", () => {
+    // Real bundle shape: the authenticated key is the config value right after
+    // the api25 base URL. A decoy `"X-API-Key":"..."` literal and an unrelated
+    // partner apiKey are also present and must be ignored.
+    const src = readFixture("2026-07-api25-config__tYFvpg.snippet.js");
     expect(extractor.extractKeyFromBundle(src)).toBe(
       "tYFvpgKw3GaxrwoztllAc2j5bekLdMF25aayCxwx",
     );
   });
 
-  it("extracts a minified equals-assigned key", () => {
-    const src = readFixture(
-      "2026-04-29__synthetic-minified__abcdef.snippet.js",
-    );
-    expect(extractor.extractKeyFromBundle(src)).toBe(
-      "abcdefghijklmnopqrstuvwxyz012345",
-    );
-  });
-
-  it("returns null for a bundle that mentions X-APi-Key only in comments", () => {
-    const src = readFixture("2026-04-29__negative-no-key.snippet.js");
-    expect(extractor.extractKeyFromBundle(src)).toBeNull();
+  it("does NOT extract the decoy X-API-Key header literal", () => {
+    // Regression guard (2026-07-04): the `"X-API-Key":"..."` literal is a
+    // decoy key that api25 rejects with 403 on the authenticated endpoints.
+    // Extracting it silently broke every write (0 filled, all flagged).
+    const decoyOnly =
+      'headers:{"Content-Type":"application/json","X-API-Key":"YOxw0L2zAB8AFTMadZRkG1TTNSAkswhY7ZMNaLFP"}';
+    expect(extractor.extractKeyFromBundle(decoyOnly)).toBeNull();
   });
 
   it("returns null for empty/non-string input", () => {
@@ -53,13 +51,13 @@ describe("extractKeyFromBundle", () => {
     expect(extractor.extractKeyFromBundle(undefined)).toBeNull();
   });
 
-  it("rejects keys outside the 20-40 alnum validation range", () => {
+  it("rejects a key outside the 20-40 alnum validation range", () => {
     expect(
-      extractor.extractKeyFromBundle('"X-APi-Key": "tooshort"'),
+      extractor.extractKeyFromBundle('api25.commonapp.org",apiKey:"short"'),
     ).toBeNull();
     expect(
       extractor.extractKeyFromBundle(
-        '"X-APi-Key": "way-way-too-long-and-has-dashes-not-alnum-12345"',
+        'api25.commonapp.org",apiKey:"way-too-long-and-has-dashes-not-alnum-123"',
       ),
     ).toBeNull();
   });
@@ -126,7 +124,7 @@ describe("resolveApiKey", () => {
   }
 
   const html = `<script src="/main.x.js"></script>`;
-  const validBundle = `var H = {"X-APi-Key": "tYFvpgKw3GaxrwoztllAc2j5bekLdMF25aayCxwx"};`;
+  const validBundle = `var cfg={applicantApi:{baseUrl:"https://api25.commonapp.org",apiKey:"tYFvpgKw3GaxrwoztllAc2j5bekLdMF25aayCxwx"}};`;
 
   it("returns cached key without fetching when fresh", async () => {
     const storage = makeStorage({

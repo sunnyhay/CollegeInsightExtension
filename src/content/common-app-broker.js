@@ -154,16 +154,31 @@
       // Extractor failed closed — do not attempt the API call.
       throw new Error("apikey_extraction_failed");
     }
-    const resp = await fetch(`${CA_API_BASE}${path}`, {
-      method,
-      headers: {
-        Authorization: idToken,
-        "X-APi-Key": apiKey,
-        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-      },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-      credentials: "omit",
-    });
+    let resp;
+    try {
+      resp = await fetch(`${CA_API_BASE}${path}`, {
+        method,
+        headers: {
+          Authorization: idToken,
+          "X-APi-Key": apiKey,
+          ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+        },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+        credentials: "omit",
+      });
+    } catch (netErr) {
+      // A wrong / stale api key surfaces as an opaque "Failed to fetch"
+      // (TypeError): api25 answers 403 WITHOUT an Access-Control-Allow-Origin
+      // header, so the browser rejects the promise before we can read
+      // `resp.status` — meaning the 401/403 retry below never runs. Retry ONCE
+      // with a forced key re-extraction so a bad cached key self-heals (e.g.
+      // after a key rotation, or a previously-cached wrong key). Verified
+      // 2026-07-04: this is exactly how the wrong-key failure manifested.
+      if (tries === 0) {
+        return caApi(method, path, body, idToken, tries + 1);
+      }
+      throw netErr;
+    }
     if ((resp.status === 401 || resp.status === 403) && tries === 0) {
       // Possible apikey rotation — retry once with forced extraction.
       return caApi(method, path, body, idToken, tries + 1);
@@ -195,12 +210,31 @@
   }
 
   async function addColleges(memberIds, idToken) {
-    return caApi(
+    const result = await caApi(
       "POST",
       "/applicant/mycolleges",
       { MemberIds: memberIds },
       idToken,
     );
+    // Common App returns HTTP 200 with a PER-MEMBER result array; a member can
+    // still fail (`isSuccess:false`, e.g. addCollegeErrorType 4 = unknown/invalid
+    // memberId). If we only trusted the HTTP status we'd record a phantom
+    // "added" and the college would silently never appear in My Colleges.
+    // Surface any rejection as an error so the caller marks it failed.
+    const items = Array.isArray(result) ? result : [];
+    const rejected = items.filter((it) => it && it.isSuccess === false);
+    if (rejected.length) {
+      const err = new Error(
+        "ca_add_rejected: " +
+          rejected
+            .map((r) => `${r.memberId}(type ${r.addCollegeErrorType})`)
+            .join(", "),
+      );
+      err.code = "ca_add_rejected";
+      err.rejectedMemberIds = rejected.map((r) => r.memberId);
+      throw err;
+    }
+    return result;
   }
 
   async function removeCollege(memberId, idToken) {
@@ -224,7 +258,7 @@
     return caApi("POST", "/answer/v2", payload, idToken);
   }
 
-  // ── POC #6 read-existing-answers operations ──────────────────────────
+  // ── POC #6 read-existing-answers operations ─────────────────────────────
   //
   // The universal answer-read endpoint discovered May 14, 2026:
   //
@@ -331,9 +365,20 @@
         structure.push({ screenId, sections: [] });
         return;
       }
-      const sections = (r.value || [])
-        .filter((s) => s.hasDefaultVisibleQuestions)
-        .map((s) => ({ sectionId: s.id, name: s.name }));
+      // Read EVERY section in the screen, not just default-visible ones.
+      // Common App reveals test-detail sections (SAT Tests=236, AP Subject
+      // Tests=6, ACT, IB, …) only after the applicant picks them in "Tests
+      // Taken", so those sections report `hasDefaultVisibleQuestions:false`
+      // even once they hold answers — and the schema exposes no
+      // current-visibility flag (`memberSectionTemplateId` is null for all).
+      // Filtering by default-visibility therefore hid already-filled SAT/AP
+      // scores, making presence-based coverage report them as "We'll fill
+      // this". Reading a non-triggered section just returns [] (handled
+      // per-section by runWithConcurrency), so this is safe.
+      const sections = (r.value || []).map((s) => ({
+        sectionId: s.id,
+        name: s.name,
+      }));
       structure.push({ screenId, sections });
       for (const s of sections) sectionIdsToFetch.push(s.sectionId);
     });
